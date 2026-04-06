@@ -1,0 +1,15 @@
+# Git internals
+.git/
+.gitignore
+
+# GitHub Actions
+.github/
+
+# Wrangler build artefacts
+.wrangler/
+
+# Dev / build tooling
+Dockerfile
+scripts/
+archive/
+README.md

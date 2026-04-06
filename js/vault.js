@@ -13,6 +13,11 @@ export function getVaultItemById(id) {
     return vaultStore.find((item) => item.id === id) || null;
 }
 
+export function clearVault() {
+    vaultStore.length = 0;
+    updateVaultUI();
+}
+
 export function updateVaultUI() {
     const sidebar = document.getElementById('sidebarStoreList');
     if (!sidebar) return;
@@ -49,6 +54,30 @@ export function updateVaultUI() {
 }
 
 export function initVaultBindings() {
+    document.getElementById('vaultClearBtn').addEventListener('click', () => {
+        clearVault();
+    });
+
+    const vaultUploadBtn = document.getElementById('vaultUploadBtn');
+    const vaultUploadInput = document.getElementById('vaultUploadInput');
+    vaultUploadBtn.addEventListener('click', () => {
+        vaultUploadInput.click();
+    });
+    vaultUploadInput.addEventListener('change', (e) => {
+        const files = Array.from(e.target.files || []);
+        files.forEach((file) => {
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const content = evt.target.result;
+                const type = content.includes('PRIVATE KEY') ? 'key' : 'cert';
+                const label = file.name.replace(/\.[^.]+$/, '');
+                saveToVault(label, type, content);
+            };
+            reader.readAsText(file);
+        });
+        e.target.value = '';
+    });
+
     const decoderVaultSelect = document.getElementById('decoderVaultSelect');
     decoderVaultSelect.addEventListener('change', (e) => {
         if (!e.target.value) return;

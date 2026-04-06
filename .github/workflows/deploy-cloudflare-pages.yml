@@ -6,6 +6,7 @@ on:
       - "**"
     tags:
       - "v*"
+  delete:
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   deploy-preview:
-    if: startsWith(github.ref, 'refs/heads/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -94,7 +95,16 @@ jobs:
           REF_SLUG=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
-          PREVIEW_NAME="${CLOUDFLARE_WORKER_NAME}-preview-${REF_SLUG}"
+          BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
+          MAX_SLUG=$(( 54 - ${#BASE_NAME} ))
+          if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
+            HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
+            PREFIX_LEN=$(( MAX_SLUG - 7 ))
+            PREFIX="${REF_SLUG:0:$PREFIX_LEN}"
+            PREFIX="${PREFIX%-}"
+            REF_SLUG="${PREFIX}-${HASH}"
+          fi
+          PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
           COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
 
           echo "Deploying preview worker: $PREVIEW_NAME"
@@ -104,7 +114,7 @@ jobs:
             --assets .
 
   deploy-production:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -181,3 +191,47 @@ jobs:
             --name "$CLOUDFLARE_WORKER_NAME" \
             --compatibility-date "$COMPATIBILITY_DATE" \
             --assets .
+
+  cleanup-preview:
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Wrangler
+        run: npm install --global wrangler@4
+
+      - name: Delete Preview Worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
+          DELETED_REF: ${{ github.event.ref }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_NAME; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          REF_SLUG=$(echo "$DELETED_REF" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')
+          REF_SLUG=${REF_SLUG#-}
+          REF_SLUG=${REF_SLUG%-}
+          BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
+          MAX_SLUG=$(( 54 - ${#BASE_NAME} ))
+          if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
+            HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
+            PREFIX_LEN=$(( MAX_SLUG - 7 ))
+            PREFIX="${REF_SLUG:0:$PREFIX_LEN}"
+            PREFIX="${PREFIX%-}"
+            REF_SLUG="${PREFIX}-${HASH}"
+          fi
+          PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
+
+          echo "Deleting preview worker: $PREVIEW_NAME"
+          wrangler delete --name "$PREVIEW_NAME" --force || true
