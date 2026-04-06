@@ -21,6 +21,7 @@ PKI Toolkit is a fully client-side web application that brings the full power of
   - [Required Secrets and Variables](#required-secrets-and-variables)
 - [Security Model](#security-model)
 - [Contributing](#contributing)
+- [Disclaimer](#disclaimer)
 
 ---
 
@@ -100,16 +101,39 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 python3 scripts/server.py
 ```
 
-Then open **http://localhost:8080**.
+Then open **http://localhost:8080**. The server automatically attempts to open the browser for you on start.
 
-The custom server sets the correct `Content-Type: application/wasm` header for `.wasm` files, which is required by browsers — using a plain file server or opening `index.html` directly via `file://` will not work.
+**CLI options**
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port PORT` / `-p PORT` | `8080` (or `$PORT`) | TCP port to listen on |
+| `--host HOST` | `127.0.0.1` (or `$HOST`) | Interface to bind to. Use `0.0.0.0` to expose on the local network |
+| `--no-open` | — | Skip automatic browser launch |
+
+Examples:
+
+```bash
+python3 scripts/server.py --port 3000
+python3 scripts/server.py --host 0.0.0.0         # LAN-accessible
+PORT=9000 python3 scripts/server.py
+python3 scripts/server.py --no-open              # CI / headless environments
+```
+
+> **Why a custom server?**
+> Browsers enforce strict rules on WebAssembly. The server sets three things that a plain `python -m http.server` does not:
+> - `Content-Type: application/wasm` — required for the browser to execute `.wasm` files
+> - `Cross-Origin-Opener-Policy: same-origin` + `Cross-Origin-Embedder-Policy: require-corp` — enables `SharedArrayBuffer`, which some Emscripten builds require
+> - `Cache-Control: no-store` — prevents stale assets during active development
+>
+> Opening `index.html` directly via `file://` will **not** work.
 
 ### Docker (optional)
 
 To run the dev server in a container:
 
 ```bash
-docker run --rm -p 8080:8080 -v "$(pwd)":/app -w /app python:3 python scripts/server.py
+docker run --rm -p 8080:8080 -v "$(pwd)":/app -w /app python:3 python scripts/server.py --no-open
 ```
 
 ---
@@ -251,4 +275,14 @@ docs: update deployment prerequisites
 ### Updating the WASM binary
 
 If your change requires a new OpenSSL build, run `scripts/rebuild_openssl_if_changed.sh`, commit the updated `vendor/openssl/openssl.js` and `vendor/openssl/openssl.wasm`, and note the OpenSSL version in the PR description.
+
+---
+
+## Disclaimer
+
+This project was built with the assistance of AI — crafted with love by [GitHub Copilot](https://github.com/features/copilot).
+
+All cryptographic logic, WebAssembly integration, and security design decisions were reviewed by the project maintainers. AI assistance was used for UI implementation, tooling, workflow automation, and documentation. No AI-generated code handles key material directly — that responsibility belongs entirely to the auditable, well-established OpenSSL library running in the WASM sandbox.
+
+Want to build something like this yourself? GitHub Copilot is available at [github.com/features/copilot](https://github.com/features/copilot).
 
