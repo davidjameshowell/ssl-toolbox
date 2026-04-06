@@ -1,4 +1,4 @@
-name: Deploy Cloudflare Pages
+name: Deploy Cloudflare Worker
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-pages-${{ github.ref }}
+  group: cloudflare-worker-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -47,123 +47,55 @@ jobs:
           API_BASE="https://api.cloudflare.com/client/v4"
 
           echo "Verifying token status..."
-          curl -sS \
+          HTTP_CODE=$(curl -sS -o /tmp/cf_token_verify.json -w "%{http_code}" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/user/tokens/verify" > /tmp/cf_token_verify.json
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
+            echo "Token verification failed."
+            cat /tmp/cf_token_verify.json
+            exit 1
+          fi
+
           jq '{success, errors, result: {id, status, not_before, expires_on}}' /tmp/cf_token_verify.json
 
-          if [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
-            echo "Token verification failed."
-            exit 1
-          fi
-
           echo
-          echo "Listing accounts visible to token..."
-          curl -sS \
+          echo "Listing workers services visible in configured account..."
+          HTTP_CODE=$(curl -sS -o /tmp/cf_workers_services.json -w "%{http_code}" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts?per_page=100" > /tmp/cf_accounts.json
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services")
 
-          if [[ "$(jq -r '.success // false' /tmp/cf_accounts.json)" != "true" ]]; then
-            echo "Failed to list accounts visible to token."
-            cat /tmp/cf_accounts.json
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_workers_services.json)" != "true" ]]; then
+            echo "Failed to list workers services."
+            cat /tmp/cf_workers_services.json
             exit 1
           fi
 
-          jq -r '.result[] | "- \(.name) [\(.id)]"' /tmp/cf_accounts.json
+          jq -r '.result[] | "- \(.name // .id // .script // "<unknown>")"' /tmp/cf_workers_services.json
 
-          if ! jq -e --arg target "$CLOUDFLARE_ACCOUNT_ID" '.result[] | select(.id == $target)' /tmp/cf_accounts.json >/dev/null; then
-            echo
-            echo "Configured CLOUDFLARE_ACCOUNT_ID is not visible to this token: $CLOUDFLARE_ACCOUNT_ID"
-            exit 1
-          fi
-
-          echo
-          echo "Configured account is visible to token: $CLOUDFLARE_ACCOUNT_ID"
-
-      - name: List Cloudflare Pages Projects
+      - name: Deploy Preview Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
         run: |
           set -euo pipefail
-          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_NAME; do
             if [[ -z "${!required:-}" ]]; then
               echo "Missing required setting: ${required}"
               exit 1
             fi
           done
 
-          API_BASE="https://api.cloudflare.com/client/v4"
-          echo "Listing Cloudflare Pages projects for account: $CLOUDFLARE_ACCOUNT_ID"
-          HTTP_CODE=$(curl -sS -o /tmp/cf_projects.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+          REF_SLUG=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')
+          REF_SLUG=${REF_SLUG#-}
+          REF_SLUG=${REF_SLUG%-}
+          PREVIEW_NAME="${CLOUDFLARE_WORKER_NAME}-preview-${REF_SLUG}"
 
-          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_projects.json)" != "true" ]]; then
-            echo "Failed to list Pages projects."
-            cat /tmp/cf_projects.json
-            exit 1
-          fi
-
-          PROJECT_NAMES="$(jq -r '.result[]?.name // empty' /tmp/cf_projects.json)"
-          if [[ -z "$PROJECT_NAMES" ]]; then
-            echo "No Pages projects visible to this account/token."
-          else
-            echo "$PROJECT_NAMES"
-          fi
-
-      - name: Validate Cloudflare Project
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-        run: |
-          set -euo pipefail
-          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_PROJECT_NAME; do
-            if [[ -z "${!required:-}" ]]; then
-              echo "Missing required setting: ${required}"
-              exit 1
-            fi
-          done
-
-          API_BASE="https://api.cloudflare.com/client/v4"
-          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT_NAME")
-
-          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_project.json)" != "true" ]]; then
-            echo "Cloudflare project preflight failed."
-            echo "Account ID: $CLOUDFLARE_ACCOUNT_ID"
-            echo "Requested project: $CLOUDFLARE_PAGES_PROJECT_NAME"
-            echo "API response:"
-            cat /tmp/cf_project.json
-
-            echo
-            echo "Projects visible in this account:"
-            curl -sS \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
-              | jq -r '.result[]?.name // empty' || true
-            exit 1
-          fi
-
-          echo "Preflight ok: project found in configured account."
-
-      - name: Deploy Preview
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${CLOUDFLARE_PAGES_PROJECT_NAME:-}" ]]; then
-            echo "Missing repository variable: CLOUDFLARE_PAGES_PROJECT_NAME"
-            exit 1
-          fi
-          wrangler pages deploy . \
-            --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" \
-            --branch "${GITHUB_REF_NAME}" \
-            --commit-dirty=true
+          echo "Deploying preview worker: $PREVIEW_NAME"
+          wrangler deploy \
+            --name "$PREVIEW_NAME" \
+            --assets .
 
   deploy-production:
     if: startsWith(github.ref, 'refs/tags/')
@@ -196,122 +128,47 @@ jobs:
           API_BASE="https://api.cloudflare.com/client/v4"
 
           echo "Verifying token status..."
-          curl -sS \
+          HTTP_CODE=$(curl -sS -o /tmp/cf_token_verify.json -w "%{http_code}" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/user/tokens/verify" > /tmp/cf_token_verify.json
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
+            echo "Token verification failed."
+            cat /tmp/cf_token_verify.json
+            exit 1
+          fi
+
           jq '{success, errors, result: {id, status, not_before, expires_on}}' /tmp/cf_token_verify.json
 
-          if [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
-            echo "Token verification failed."
-            exit 1
-          fi
-
           echo
-          echo "Listing accounts visible to token..."
-          curl -sS \
+          echo "Listing workers services visible in configured account..."
+          HTTP_CODE=$(curl -sS -o /tmp/cf_workers_services.json -w "%{http_code}" \
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts?per_page=100" > /tmp/cf_accounts.json
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services")
 
-          if [[ "$(jq -r '.success // false' /tmp/cf_accounts.json)" != "true" ]]; then
-            echo "Failed to list accounts visible to token."
-            cat /tmp/cf_accounts.json
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_workers_services.json)" != "true" ]]; then
+            echo "Failed to list workers services."
+            cat /tmp/cf_workers_services.json
             exit 1
           fi
 
-          jq -r '.result[] | "- \(.name) [\(.id)]"' /tmp/cf_accounts.json
+          jq -r '.result[] | "- \(.name // .id // .script // "<unknown>")"' /tmp/cf_workers_services.json
 
-          if ! jq -e --arg target "$CLOUDFLARE_ACCOUNT_ID" '.result[] | select(.id == $target)' /tmp/cf_accounts.json >/dev/null; then
-            echo
-            echo "Configured CLOUDFLARE_ACCOUNT_ID is not visible to this token: $CLOUDFLARE_ACCOUNT_ID"
-            exit 1
-          fi
-
-          echo
-          echo "Configured account is visible to token: $CLOUDFLARE_ACCOUNT_ID"
-
-      - name: List Cloudflare Pages Projects
+      - name: Deploy Production Worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
         run: |
           set -euo pipefail
-          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_NAME; do
             if [[ -z "${!required:-}" ]]; then
               echo "Missing required setting: ${required}"
               exit 1
             fi
           done
 
-          API_BASE="https://api.cloudflare.com/client/v4"
-          echo "Listing Cloudflare Pages projects for account: $CLOUDFLARE_ACCOUNT_ID"
-          HTTP_CODE=$(curl -sS -o /tmp/cf_projects.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
-
-          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_projects.json)" != "true" ]]; then
-            echo "Failed to list Pages projects."
-            cat /tmp/cf_projects.json
-            exit 1
-          fi
-
-          PROJECT_NAMES="$(jq -r '.result[]?.name // empty' /tmp/cf_projects.json)"
-          if [[ -z "$PROJECT_NAMES" ]]; then
-            echo "No Pages projects visible to this account/token."
-          else
-            echo "$PROJECT_NAMES"
-          fi
-
-      - name: Validate Cloudflare Project
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-        run: |
-          set -euo pipefail
-          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_PROJECT_NAME; do
-            if [[ -z "${!required:-}" ]]; then
-              echo "Missing required setting: ${required}"
-              exit 1
-            fi
-          done
-
-          API_BASE="https://api.cloudflare.com/client/v4"
-          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT_NAME")
-
-          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_project.json)" != "true" ]]; then
-            echo "Cloudflare project preflight failed."
-            echo "Account ID: $CLOUDFLARE_ACCOUNT_ID"
-            echo "Requested project: $CLOUDFLARE_PAGES_PROJECT_NAME"
-            echo "API response:"
-            cat /tmp/cf_project.json
-
-            echo
-            echo "Projects visible in this account:"
-            curl -sS \
-              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
-              | jq -r '.result[]?.name // empty' || true
-            exit 1
-          fi
-
-          echo "Preflight ok: project found in configured account."
-
-      - name: Deploy Production
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
-          CLOUDFLARE_PAGES_PRODUCTION_BRANCH: ${{ vars.CLOUDFLARE_PAGES_PRODUCTION_BRANCH }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${CLOUDFLARE_PAGES_PROJECT_NAME:-}" ]]; then
-            echo "Missing repository variable: CLOUDFLARE_PAGES_PROJECT_NAME"
-            exit 1
-          fi
-          PROD_BRANCH="${CLOUDFLARE_PAGES_PRODUCTION_BRANCH:-main}"
-          wrangler pages deploy . \
-            --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" \
-            --branch "$PROD_BRANCH" \
-            --commit-dirty=true
+          echo "Deploying production worker: $CLOUDFLARE_WORKER_NAME"
+          wrangler deploy \
+            --name "$CLOUDFLARE_WORKER_NAME" \
+            --assets .
