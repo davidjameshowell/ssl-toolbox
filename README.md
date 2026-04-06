@@ -41,6 +41,22 @@ Recommended settings:
 - Build command: *(empty)*
 - Build output directory: `/` (root)
 
+### GitHub Actions Deployment
+
+This repository includes a workflow at `.github/workflows/deploy-cloudflare-pages.yml`.
+
+Behavior:
+
+- Pushes to any branch create a **preview deployment** on Cloudflare Pages.
+- Pushes of tags matching `v*` create a **production deployment**.
+
+Configure these GitHub repository settings before using the workflow:
+
+- Secret: `CLOUDFLARE_API_TOKEN`
+- Secret: `CLOUDFLARE_ACCOUNT_ID`
+- Variable: `CLOUDFLARE_PAGES_PROJECT_NAME`
+- Optional variable: `CLOUDFLARE_PAGES_PRODUCTION_BRANCH` (defaults to `main`)
+
 ## Notes
 
 - `vendor/openssl/` assets are loaded directly by `index.html`.
