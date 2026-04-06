@@ -23,9 +23,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild OpenSSL Artifacts
-        run: bash scripts/rebuild_openssl_if_changed.sh
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -33,6 +30,55 @@ jobs:
 
       - name: Install Wrangler
         run: npm install --global wrangler@4
+
+      - name: Debug Cloudflare Authorization
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+
+          echo "Verifying token status..."
+          curl -sS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/user/tokens/verify" > /tmp/cf_token_verify.json
+          jq '{success, errors, result: {id, status, not_before, expires_on}}' /tmp/cf_token_verify.json
+
+          if [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
+            echo "Token verification failed."
+            exit 1
+          fi
+
+          echo
+          echo "Listing accounts visible to token..."
+          curl -sS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts?per_page=100" > /tmp/cf_accounts.json
+
+          if [[ "$(jq -r '.success // false' /tmp/cf_accounts.json)" != "true" ]]; then
+            echo "Failed to list accounts visible to token."
+            cat /tmp/cf_accounts.json
+            exit 1
+          fi
+
+          jq -r '.result[] | "- \(.name) [\(.id)]"' /tmp/cf_accounts.json
+
+          if ! jq -e --arg target "$CLOUDFLARE_ACCOUNT_ID" '.result[] | select(.id == $target)' /tmp/cf_accounts.json >/dev/null; then
+            echo
+            echo "Configured CLOUDFLARE_ACCOUNT_ID is not visible to this token: $CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+          echo
+          echo "Configured account is visible to token: $CLOUDFLARE_ACCOUNT_ID"
 
       - name: List Cloudflare Pages Projects
         env:
@@ -126,9 +172,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild OpenSSL Artifacts
-        run: bash scripts/rebuild_openssl_if_changed.sh
-
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -136,6 +179,55 @@ jobs:
 
       - name: Install Wrangler
         run: npm install --global wrangler@4
+
+      - name: Debug Cloudflare Authorization
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+
+          echo "Verifying token status..."
+          curl -sS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/user/tokens/verify" > /tmp/cf_token_verify.json
+          jq '{success, errors, result: {id, status, not_before, expires_on}}' /tmp/cf_token_verify.json
+
+          if [[ "$(jq -r '.success // false' /tmp/cf_token_verify.json)" != "true" ]]; then
+            echo "Token verification failed."
+            exit 1
+          fi
+
+          echo
+          echo "Listing accounts visible to token..."
+          curl -sS \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts?per_page=100" > /tmp/cf_accounts.json
+
+          if [[ "$(jq -r '.success // false' /tmp/cf_accounts.json)" != "true" ]]; then
+            echo "Failed to list accounts visible to token."
+            cat /tmp/cf_accounts.json
+            exit 1
+          fi
+
+          jq -r '.result[] | "- \(.name) [\(.id)]"' /tmp/cf_accounts.json
+
+          if ! jq -e --arg target "$CLOUDFLARE_ACCOUNT_ID" '.result[] | select(.id == $target)' /tmp/cf_accounts.json >/dev/null; then
+            echo
+            echo "Configured CLOUDFLARE_ACCOUNT_ID is not visible to this token: $CLOUDFLARE_ACCOUNT_ID"
+            exit 1
+          fi
+
+          echo
+          echo "Configured account is visible to token: $CLOUDFLARE_ACCOUNT_ID"
 
       - name: List Cloudflare Pages Projects
         env:
