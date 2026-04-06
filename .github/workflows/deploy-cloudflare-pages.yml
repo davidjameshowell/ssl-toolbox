@@ -98,8 +98,11 @@ jobs:
           BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
           MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
           if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
-            REF_SLUG="${REF_SLUG:0:$MAX_SLUG}"
-            REF_SLUG="${REF_SLUG%-}"
+            HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
+            PREFIX_LEN=$(( MAX_SLUG - 7 ))
+            PREFIX="${REF_SLUG:0:$PREFIX_LEN}"
+            PREFIX="${PREFIX%-}"
+            REF_SLUG="${PREFIX}-${HASH}"
           fi
           PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
           COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
@@ -222,8 +225,11 @@ jobs:
           BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
           MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
           if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
-            REF_SLUG="${REF_SLUG:0:$MAX_SLUG}"
-            REF_SLUG="${REF_SLUG%-}"
+            HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
+            PREFIX_LEN=$(( MAX_SLUG - 7 ))
+            PREFIX="${REF_SLUG:0:$PREFIX_LEN}"
+            PREFIX="${PREFIX%-}"
+            REF_SLUG="${PREFIX}-${HASH}"
           fi
           PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
 
