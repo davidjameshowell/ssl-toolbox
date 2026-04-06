@@ -31,6 +31,43 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@4
 
+      - name: Validate Cloudflare Project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_PROJECT_NAME; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT_NAME")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_project.json)" != "true" ]]; then
+            echo "Cloudflare project preflight failed."
+            echo "Account ID: $CLOUDFLARE_ACCOUNT_ID"
+            echo "Requested project: $CLOUDFLARE_PAGES_PROJECT_NAME"
+            echo "API response:"
+            cat /tmp/cf_project.json
+
+            echo
+            echo "Projects visible in this account:"
+            curl -sS \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
+              | jq -r '.result[]?.name // empty' || true
+            exit 1
+          fi
+
+          echo "Preflight ok: project found in configured account."
+
       - name: Deploy Preview
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -44,7 +81,8 @@ jobs:
           fi
           wrangler pages deploy . \
             --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" \
-            --branch "${GITHUB_REF_NAME}"
+            --branch "${GITHUB_REF_NAME}" \
+            --commit-dirty=true
 
   deploy-production:
     if: startsWith(github.ref, 'refs/tags/')
@@ -61,6 +99,43 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@4
 
+      - name: Validate Cloudflare Project
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_PROJECT_NAME; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+          HTTP_CODE=$(curl -sS -o /tmp/cf_project.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects/$CLOUDFLARE_PAGES_PROJECT_NAME")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_project.json)" != "true" ]]; then
+            echo "Cloudflare project preflight failed."
+            echo "Account ID: $CLOUDFLARE_ACCOUNT_ID"
+            echo "Requested project: $CLOUDFLARE_PAGES_PROJECT_NAME"
+            echo "API response:"
+            cat /tmp/cf_project.json
+
+            echo
+            echo "Projects visible in this account:"
+            curl -sS \
+              -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects" \
+              | jq -r '.result[]?.name // empty' || true
+            exit 1
+          fi
+
+          echo "Preflight ok: project found in configured account."
+
       - name: Deploy Production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -76,4 +151,5 @@ jobs:
           PROD_BRANCH="${CLOUDFLARE_PAGES_PRODUCTION_BRANCH:-main}"
           wrangler pages deploy . \
             --project-name "$CLOUDFLARE_PAGES_PROJECT_NAME" \
-            --branch "$PROD_BRANCH"
+            --branch "$PROD_BRANCH" \
+            --commit-dirty=true
