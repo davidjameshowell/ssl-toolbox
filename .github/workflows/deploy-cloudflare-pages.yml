@@ -95,7 +95,13 @@ jobs:
           REF_SLUG=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
-          PREVIEW_NAME="${CLOUDFLARE_WORKER_NAME}-preview-${REF_SLUG}"
+          BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
+          MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
+          if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
+            REF_SLUG="${REF_SLUG:0:$MAX_SLUG}"
+            REF_SLUG="${REF_SLUG%-}"
+          fi
+          PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
           COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
 
           echo "Deploying preview worker: $PREVIEW_NAME"
@@ -213,7 +219,13 @@ jobs:
           REF_SLUG=$(echo "$DELETED_REF" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9-' '-')
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
-          PREVIEW_NAME="${CLOUDFLARE_WORKER_NAME}-preview-${REF_SLUG}"
+          BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
+          MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
+          if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
+            REF_SLUG="${REF_SLUG:0:$MAX_SLUG}"
+            REF_SLUG="${REF_SLUG%-}"
+          fi
+          PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
 
           echo "Deleting preview worker: $PREVIEW_NAME"
           wrangler delete --name "$PREVIEW_NAME" --force || true
