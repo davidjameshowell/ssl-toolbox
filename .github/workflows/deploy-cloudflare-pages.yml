@@ -34,6 +34,38 @@ jobs:
       - name: Install Wrangler
         run: npm install --global wrangler@4
 
+      - name: List Cloudflare Pages Projects
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+          echo "Listing Cloudflare Pages projects for account: $CLOUDFLARE_ACCOUNT_ID"
+          HTTP_CODE=$(curl -sS -o /tmp/cf_projects.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_projects.json)" != "true" ]]; then
+            echo "Failed to list Pages projects."
+            cat /tmp/cf_projects.json
+            exit 1
+          fi
+
+          PROJECT_NAMES="$(jq -r '.result[]?.name // empty' /tmp/cf_projects.json)"
+          if [[ -z "$PROJECT_NAMES" ]]; then
+            echo "No Pages projects visible to this account/token."
+          else
+            echo "$PROJECT_NAMES"
+          fi
+
       - name: Validate Cloudflare Project
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -104,6 +136,38 @@ jobs:
 
       - name: Install Wrangler
         run: npm install --global wrangler@4
+
+      - name: List Cloudflare Pages Projects
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "Missing required setting: ${required}"
+              exit 1
+            fi
+          done
+
+          API_BASE="https://api.cloudflare.com/client/v4"
+          echo "Listing Cloudflare Pages projects for account: $CLOUDFLARE_ACCOUNT_ID"
+          HTTP_CODE=$(curl -sS -o /tmp/cf_projects.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "$API_BASE/accounts/$CLOUDFLARE_ACCOUNT_ID/pages/projects")
+
+          if [[ "$HTTP_CODE" != "200" ]] || [[ "$(jq -r '.success // false' /tmp/cf_projects.json)" != "true" ]]; then
+            echo "Failed to list Pages projects."
+            cat /tmp/cf_projects.json
+            exit 1
+          fi
+
+          PROJECT_NAMES="$(jq -r '.result[]?.name // empty' /tmp/cf_projects.json)"
+          if [[ -z "$PROJECT_NAMES" ]]; then
+            echo "No Pages projects visible to this account/token."
+          else
+            echo "$PROJECT_NAMES"
+          fi
 
       - name: Validate Cloudflare Project
         env:
