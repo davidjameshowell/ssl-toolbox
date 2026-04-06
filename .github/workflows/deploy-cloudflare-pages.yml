@@ -11,6 +11,9 @@ on:
 permissions:
   contents: read
 
+env:
+  DEFAULT_WORKER_COMPATIBILITY_DATE: "2026-04-06"
+
 concurrency:
   group: cloudflare-worker-${{ github.ref }}
   cancel-in-progress: true
@@ -78,6 +81,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
+          CLOUDFLARE_WORKER_COMPATIBILITY_DATE: ${{ vars.CLOUDFLARE_WORKER_COMPATIBILITY_DATE }}
         run: |
           set -euo pipefail
           for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_NAME; do
@@ -91,10 +95,12 @@ jobs:
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
           PREVIEW_NAME="${CLOUDFLARE_WORKER_NAME}-preview-${REF_SLUG}"
+          COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
 
           echo "Deploying preview worker: $PREVIEW_NAME"
           wrangler deploy \
             --name "$PREVIEW_NAME" \
+            --compatibility-date "$COMPATIBILITY_DATE" \
             --assets .
 
   deploy-production:
@@ -159,6 +165,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_WORKER_NAME: ${{ vars.CLOUDFLARE_WORKER_NAME }}
+          CLOUDFLARE_WORKER_COMPATIBILITY_DATE: ${{ vars.CLOUDFLARE_WORKER_COMPATIBILITY_DATE }}
         run: |
           set -euo pipefail
           for required in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_WORKER_NAME; do
@@ -168,7 +175,9 @@ jobs:
             fi
           done
 
+          COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
           echo "Deploying production worker: $CLOUDFLARE_WORKER_NAME"
           wrangler deploy \
             --name "$CLOUDFLARE_WORKER_NAME" \
+            --compatibility-date "$COMPATIBILITY_DATE" \
             --assets .
