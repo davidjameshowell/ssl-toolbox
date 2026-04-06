@@ -96,7 +96,7 @@ jobs:
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
           BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
-          MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
+          MAX_SLUG=$(( 54 - ${#BASE_NAME} ))
           if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
             HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
             PREFIX_LEN=$(( MAX_SLUG - 7 ))
@@ -223,7 +223,7 @@ jobs:
           REF_SLUG=${REF_SLUG#-}
           REF_SLUG=${REF_SLUG%-}
           BASE_NAME="${CLOUDFLARE_WORKER_NAME}-preview-"
-          MAX_SLUG=$(( 63 - ${#BASE_NAME} ))
+          MAX_SLUG=$(( 54 - ${#BASE_NAME} ))
           if [[ ${#REF_SLUG} -gt $MAX_SLUG ]]; then
             HASH=$(echo "$REF_SLUG" | sha256sum | cut -c1-6)
             PREFIX_LEN=$(( MAX_SLUG - 7 ))
