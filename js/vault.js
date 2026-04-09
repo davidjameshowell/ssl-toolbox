@@ -1,4 +1,4 @@
-import { vaultStore } from './state.js';
+import { vaultStore, persistVault } from './state.js';
 
 export function saveToVault(label, type, data) {
     if (!data) return;
@@ -6,6 +6,7 @@ export function saveToVault(label, type, data) {
 
     const id = `vitem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     vaultStore.push({ id, label, type, data });
+    persistVault();
     updateVaultUI();
 }
 
@@ -15,6 +16,7 @@ export function getVaultItemById(id) {
 
 export function clearVault() {
     vaultStore.length = 0;
+    persistVault();
     updateVaultUI();
 }
 
@@ -54,44 +56,47 @@ export function updateVaultUI() {
 }
 
 export function initVaultBindings() {
-    document.getElementById('vaultClearBtn').addEventListener('click', () => {
-        clearVault();
-    });
+    const vaultClearBtn = document.getElementById('vaultClearBtn');
+    if (vaultClearBtn) {
+        vaultClearBtn.addEventListener('click', () => { clearVault(); });
+    }
 
     const vaultUploadBtn = document.getElementById('vaultUploadBtn');
     const vaultUploadInput = document.getElementById('vaultUploadInput');
-    vaultUploadBtn.addEventListener('click', () => {
-        vaultUploadInput.click();
-    });
-    vaultUploadInput.addEventListener('change', (e) => {
-        const files = Array.from(e.target.files || []);
-        files.forEach((file) => {
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const content = evt.target.result;
-                const type = content.includes('PRIVATE KEY') ? 'key' : 'cert';
-                const label = file.name.replace(/\.[^.]+$/, '');
-                saveToVault(label, type, content);
-            };
-            reader.readAsText(file);
+    if (vaultUploadBtn && vaultUploadInput) {
+        vaultUploadBtn.addEventListener('click', () => { vaultUploadInput.click(); });
+        vaultUploadInput.addEventListener('change', (e) => {
+            const files = Array.from(e.target.files || []);
+            files.forEach((file) => {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    const content = evt.target.result;
+                    const type = content.includes('PRIVATE KEY') ? 'key' : 'cert';
+                    const label = file.name.replace(/\.[^.]+$/, '');
+                    saveToVault(label, type, content);
+                };
+                reader.readAsText(file);
+            });
+            e.target.value = '';
         });
-        e.target.value = '';
-    });
+    }
 
     const decoderVaultSelect = document.getElementById('decoderVaultSelect');
-    decoderVaultSelect.addEventListener('change', (e) => {
-        if (!e.target.value) return;
-        const item = getVaultItemById(e.target.value);
-        if (!item) return;
-
-        const textarea = document.getElementById('pemInput');
-        textarea.value = item.data;
-        textarea.dispatchEvent(new Event('input'));
-        e.target.value = '';
-    });
+    if (decoderVaultSelect) {
+        decoderVaultSelect.addEventListener('change', (e) => {
+            if (!e.target.value) return;
+            const item = getVaultItemById(e.target.value);
+            if (!item) return;
+            const textarea = document.getElementById('pemInput');
+            textarea.value = item.data;
+            textarea.dispatchEvent(new Event('input'));
+            e.target.value = '';
+        });
+    }
 
     ['match1VaultSelect', 'match2VaultSelect'].forEach((id, index) => {
         const select = document.getElementById(id);
+        if (!select) return;
         select.addEventListener('change', (e) => {
             if (!e.target.value) return;
             const item = getVaultItemById(e.target.value);
@@ -102,23 +107,37 @@ export function initVaultBindings() {
         });
     });
 
-    document.getElementById('convCertVaultSelect').addEventListener('change', (e) => {
-        if (e.target.value) {
-            document.getElementById('convFile').value = '';
-        }
-    });
+    const convCert = document.getElementById('convCertVaultSelect');
+    if (convCert) {
+        convCert.addEventListener('change', (e) => {
+            if (e.target.value) {
+                document.getElementById('convFile').value = '';
+            }
+        });
+    }
 
-    document.getElementById('convKeyVaultSelect').addEventListener('change', (e) => {
-        if (e.target.value) {
-            document.getElementById('convKeyFile').value = '';
-        }
-    });
+    const convKey = document.getElementById('convKeyVaultSelect');
+    if (convKey) {
+        convKey.addEventListener('change', (e) => {
+            if (e.target.value) {
+                document.getElementById('convKeyFile').value = '';
+            }
+        });
+    }
 
-    document.getElementById('convFile').addEventListener('change', () => {
-        document.getElementById('convCertVaultSelect').value = '';
-    });
+    const convFile = document.getElementById('convFile');
+    if (convFile) {
+        convFile.addEventListener('change', () => {
+            const s = document.getElementById('convCertVaultSelect');
+            if (s) s.value = '';
+        });
+    }
 
-    document.getElementById('convKeyFile').addEventListener('change', () => {
-        document.getElementById('convKeyVaultSelect').value = '';
-    });
+    const convKeyFile = document.getElementById('convKeyFile');
+    if (convKeyFile) {
+        convKeyFile.addEventListener('change', () => {
+            const s = document.getElementById('convKeyVaultSelect');
+            if (s) s.value = '';
+        });
+    }
 }

@@ -37,14 +37,21 @@ MIME_OVERRIDES = {
 }
 
 # Security / compatibility headers added to every response.
+COMMON_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control":          "no-store",
+}
+
 # Cross-Origin-Embedder-Policy + Cross-Origin-Opener-Policy enable
 # SharedArrayBuffer (required by some Emscripten builds).
-EXTRA_HEADERS = {
+# Only served on paths that actually need WASM (pki.html + vendor/openssl/).
+COEP_HEADERS = {
     "Cross-Origin-Opener-Policy":   "same-origin",
     "Cross-Origin-Embedder-Policy": "require-corp",
-    "X-Content-Type-Options":       "nosniff",
-    "Cache-Control":                "no-store",
 }
+
+# Paths that require COEP/COOP for WASM SharedArrayBuffer support.
+_COEP_PREFIXES = ("/pki.html", "/vendor/openssl/")
 
 # ANSI colour helpers (disabled on Windows or non-TTY)
 _USE_COLOUR = sys.stdout.isatty() and sys.platform != "win32"
@@ -67,12 +74,17 @@ class DevHandler(http.server.SimpleHTTPRequestHandler):
     """Static file handler with corrected MIME types and dev-friendly headers."""
 
     def end_headers(self) -> None:
-        suffix = Path(self.path.split("?")[0]).suffix.lower()
+        clean = self.path.split("?")[0]
+        suffix = Path(clean).suffix.lower()
         mime = MIME_OVERRIDES.get(suffix)
         if mime:
             self.send_header("Content-Type", mime)
-        for name, value in EXTRA_HEADERS.items():
+        for name, value in COMMON_HEADERS.items():
             self.send_header(name, value)
+        # Only add COEP/COOP on WASM-dependent paths
+        if any(clean.startswith(p) for p in _COEP_PREFIXES):
+            for name, value in COEP_HEADERS.items():
+                self.send_header(name, value)
         super().end_headers()
 
     def log_message(self, fmt: str, *args) -> None:  # type: ignore[override]

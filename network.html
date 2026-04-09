@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Testing — TestingServers.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased h-screen flex overflow-hidden">
+
+    <div id="sidebar" class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0"></div>
+
+    <div class="flex-1 overflow-y-auto p-8 relative">
+
+        <div id="dnsTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">DNS Lookup</h2>
+                <p class="text-slate-500 leading-relaxed">Query DNS records via the API proxy (Cloudflare DNS-over-HTTPS).</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex gap-4 items-end">
+                <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Domain</label><input type="text" id="dnsDomain" placeholder="example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <div class="w-32"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Type</label><select id="dnsRecordType" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"></select></div>
+                <button id="dnsLookupBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm shrink-0">Lookup</button>
+            </div>
+            <div id="dnsResults" class="mt-6"></div>
+        </div>
+
+        <div id="sslcheckTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">SSL/TLS Certificate Checker</h2>
+                <p class="text-slate-500 leading-relaxed">Inspect a remote server's SSL certificate chain, TLS version, and cipher suite via the API proxy.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex gap-4 items-end">
+                <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Hostname</label><input type="text" id="sslHost" placeholder="example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <div class="w-24"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Port</label><input type="text" id="sslPort" value="443" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="sslCheckBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm shrink-0">Check SSL</button>
+            </div>
+            <div id="sslResults" class="mt-6"></div>
+        </div>
+
+        <div id="headersTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">HTTP Header Analyzer</h2>
+                <p class="text-slate-500 leading-relaxed">Inspect response headers and score security header configuration via the API proxy.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex gap-4 items-end">
+                <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">URL</label><input type="text" id="headersUrl" placeholder="https://example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="headersCheckBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm shrink-0">Analyze</button>
+            </div>
+            <div id="headersResults" class="mt-6"></div>
+        </div>
+
+        <div id="whoisTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">WHOIS Lookup</h2>
+                <p class="text-slate-500 leading-relaxed">Query domain registration information via the API proxy.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex gap-4 items-end">
+                <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Domain</label><input type="text" id="whoisDomain" placeholder="example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="whoisLookupBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm shrink-0">Lookup</button>
+            </div>
+            <div id="whoisResults" class="mt-6"></div>
+        </div>
+
+        <div id="mailTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Mail Server Tester</h2>
+                <p class="text-slate-500 leading-relaxed">Check MX records, SMTP connectivity, STARTTLS, SPF, DKIM, and DMARC via the API proxy.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex gap-4 items-end">
+                <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Domain</label><input type="text" id="mailDomain" placeholder="example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="mailCheckBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm shrink-0">Test Mail Server</button>
+            </div>
+            <div id="mailResults" class="mt-6"></div>
+        </div>
+
+        <div id="portscanTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Port Scanner</h2>
+                <p class="text-slate-500 leading-relaxed">Test TCP port connectivity via the API proxy. Maximum 20 ports per scan.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex gap-4">
+                    <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Hostname / IP</label><input type="text" id="portscanHost" placeholder="example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                    <div class="w-40"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Preset</label>
+                        <select id="portscanPreset" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="">Custom</option><option value="web">Web (80, 443, 8080, 8443)</option><option value="mail">Mail (25, 110, 143, 465, 587, 993, 995)</option><option value="database">Database (3306, 5432, 1433, 27017, 6379)</option><option value="remote">Remote (22, 23, 3389, 5900)</option></select>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Ports (comma-separated)</label><input type="text" id="portscanPorts" placeholder="80, 443, 22, 3389" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="portscanBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50">Scan Ports</button>
+            </div>
+            <div id="portscanResults" class="mt-6"></div>
+        </div>
+
+    </div>
+
+    <script>window.__PAGE = 'network';</script>
+    <script type="module">
+        import { injectLayout } from './js/layout.js';
+        import { createSwitchTab, activateFromHash } from './js/navigation.js';
+        import { initVaultBindings, updateVaultUI } from './js/vault.js';
+        import { initDnsTool } from './js/tools/dns.js';
+        import { initSslcheckTool } from './js/tools/sslcheck.js';
+        import { initHeadersTool } from './js/tools/headers.js';
+        import { initWhoisTool } from './js/tools/whois.js';
+        import { initMailTool } from './js/tools/mail.js';
+        import { initPortscanTool } from './js/tools/portscan.js';
+
+        const TABS = ['dnsTab', 'sslcheckTab', 'headersTab', 'whoisTab', 'mailTab', 'portscanTab'];
+        createSwitchTab(TABS);
+        injectLayout();
+        initVaultBindings();
+        updateVaultUI();
+        initDnsTool(); initSslcheckTool(); initHeadersTool();
+        initWhoisTool(); initMailTool(); initPortscanTool();
+        activateFromHash(TABS);
+    </script>
+</body>
+</html>

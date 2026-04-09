@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Tools — TestingServers.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/openpgp@5/dist/openpgp.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased h-screen flex overflow-hidden">
+
+    <div id="sidebar" class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0"></div>
+
+    <div class="flex-1 overflow-y-auto p-8 relative">
+
+        <div id="jwtTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">JWT Tools</h2>
+                <p class="text-slate-500 leading-relaxed">Decode, inspect, and verify JSON Web Tokens. Everything runs in your browser using the Web Crypto API.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                <div class="bg-indigo-600 px-4 py-3"><h3 class="text-white font-medium text-sm">Paste JWT</h3></div>
+                <textarea id="jwtInput" spellcheck="false" class="w-full h-32 p-4 font-mono text-xs text-slate-700 focus:outline-none resize-none bg-slate-50" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea>
+            </div>
+            <div id="jwtResults" class="mt-6"></div>
+            <div class="mt-6 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <h4 class="font-bold text-slate-700 text-sm mb-3">Verify Signature</h4>
+                <textarea id="jwtVerifyKey" spellcheck="false" class="w-full h-24 p-3 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50 mb-3" placeholder="Paste public key (PEM) or shared secret for HMAC..."></textarea>
+                <button id="jwtVerifyBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm">Verify</button>
+            </div>
+        </div>
+
+        <div id="pgpTab" class="max-w-2xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">PGP Key Tools</h2>
+                <p class="text-slate-500 leading-relaxed">Generate and inspect PGP/GPG keys using OpenPGP.js. All operations run locally.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Name *</label><input type="text" id="pgpName" placeholder="Jane Doe" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Email *</label><input type="email" id="pgpEmail" placeholder="jane@example.com" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Key Type</label>
+                        <select id="pgpKeyType" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="ecc">ECC (Curve25519)</option><option value="rsa2048">RSA 2048</option><option value="rsa4096">RSA 4096</option></select>
+                    </div>
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Passphrase (optional)</label><input type="password" id="pgpPassphrase" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                </div>
+                <button id="pgpGenerateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50">Generate PGP Key Pair</button>
+                <div id="pgpStatus" class="text-center font-medium mt-4 text-sm hidden"></div>
+            </div>
+            <div id="pgpResults" class="hidden mt-6 space-y-4">
+                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden text-sm">
+                    <dl class="divide-y divide-slate-100">
+                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4"><dt class="font-medium text-slate-500">Fingerprint</dt><dd id="pgpFingerprint" class="text-slate-900 sm:col-span-2 font-mono text-xs">-</dd></div>
+                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 bg-slate-50"><dt class="font-medium text-slate-500">Algorithm</dt><dd id="pgpAlgorithm" class="text-slate-900 sm:col-span-2">-</dd></div>
+                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4"><dt class="font-medium text-slate-500">Created</dt><dd id="pgpCreated" class="text-slate-900 sm:col-span-2">-</dd></div>
+                    </dl>
+                </div>
+                <div><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Public Key</h4><pre id="pgpOutputPublic" class="bg-slate-800 text-emerald-400 rounded-lg p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto"></pre><button id="pgpDownloadPublic" class="mt-2 text-sm text-blue-600 hover:text-blue-800 font-semibold">Download Public Key</button></div>
+                <div><h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Private Key</h4><pre id="pgpOutputPrivate" class="bg-slate-800 text-amber-400 rounded-lg p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words max-h-48 overflow-y-auto"></pre><button id="pgpDownloadPrivate" class="mt-2 text-sm text-blue-600 hover:text-blue-800 font-semibold">Download Private Key</button></div>
+            </div>
+            <div class="mt-8 border-t border-slate-200 pt-8">
+                <h3 class="text-lg font-bold text-slate-800 mb-4">Inspect PGP Key</h3>
+                <textarea id="pgpInspectInput" spellcheck="false" class="w-full h-40 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Paste armored PGP public key..."></textarea>
+                <button id="pgpInspectBtn" class="mt-3 bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-lg text-sm">Inspect Key</button>
+                <div id="pgpInspectResults" class="mt-4"></div>
+            </div>
+        </div>
+
+        <div id="ocspTab" class="max-w-2xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">OCSP / CRL Checker</h2>
+                <p class="text-slate-500 leading-relaxed">Check certificate revocation status via OCSP. Requires the API proxy.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Certificate (PEM)</label><textarea id="ocspCert" spellcheck="false" class="w-full h-32 p-3 font-mono text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Paste leaf certificate PEM..."></textarea></div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Issuer Certificate (PEM, optional)</label><textarea id="ocspIssuer" spellcheck="false" class="w-full h-24 p-3 font-mono text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Paste issuer certificate PEM..."></textarea></div>
+                <button id="ocspCheckBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50">Check Revocation Status</button>
+            </div>
+            <div id="ocspResults" class="mt-6"></div>
+        </div>
+
+    </div>
+
+    <script>window.__PAGE = 'security';</script>
+    <script type="module">
+        import { injectLayout } from './js/layout.js';
+        import { createSwitchTab, activateFromHash } from './js/navigation.js';
+        import { initVaultBindings, updateVaultUI } from './js/vault.js';
+        import { initJwtTool } from './js/tools/jwt.js';
+        import { initPgpTool } from './js/tools/pgp.js';
+        import { initOcspTool } from './js/tools/ocsp.js';
+
+        const TABS = ['jwtTab', 'pgpTab', 'ocspTab'];
+        createSwitchTab(TABS);
+        injectLayout();
+        initVaultBindings();
+        updateVaultUI();
+        initJwtTool(); initPgpTool(); initOcspTool();
+        activateFromHash(TABS);
+    </script>
+</body>
+</html>

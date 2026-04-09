@@ -4,6 +4,25 @@ import { initPfxTool } from './tools/pfx.js';
 import { initDecoderTool } from './tools/decoder.js';
 import { initMatcherTool } from './tools/matcher.js';
 import { initConverterTool } from './tools/converter.js';
+import { initCsrTool } from './tools/csr.js';
+import { initJwtTool } from './tools/jwt.js';
+import { initSshTool } from './tools/ssh.js';
+import { initAsn1Tool } from './tools/asn1.js';
+import { initPgpTool } from './tools/pgp.js';
+import { initCiphersTool } from './tools/ciphers.js';
+import { initEncoderTool } from './tools/encoder.js';
+import { initHashTool } from './tools/hash.js';
+import { initDataconvTool } from './tools/dataconv.js';
+import { initRegexTool } from './tools/regex.js';
+import { initDiffTool } from './tools/diff.js';
+import { initUuidTool } from './tools/uuid.js';
+import { initDnsTool } from './tools/dns.js';
+import { initSslcheckTool } from './tools/sslcheck.js';
+import { initHeadersTool } from './tools/headers.js';
+import { initOcspTool } from './tools/ocsp.js';
+import { initWhoisTool } from './tools/whois.js';
+import { initMailTool } from './tools/mail.js';
+import { initPortscanTool } from './tools/portscan.js';
 
 function initApp() {
     initNavigation();
@@ -12,6 +31,25 @@ function initApp() {
     initDecoderTool();
     initMatcherTool();
     initConverterTool();
+    initCsrTool();
+    initJwtTool();
+    initSshTool();
+    initAsn1Tool();
+    initPgpTool();
+    initCiphersTool();
+    initEncoderTool();
+    initHashTool();
+    initDataconvTool();
+    initRegexTool();
+    initDiffTool();
+    initUuidTool();
+    initDnsTool();
+    initSslcheckTool();
+    initHeadersTool();
+    initOcspTool();
+    initWhoisTool();
+    initMailTool();
+    initPortscanTool();
     updateVaultUI();
 }
 

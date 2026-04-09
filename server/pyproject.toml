@@ -1,0 +1,15 @@
+[project]
+name = "testingservers-api"
+version = "1.0.0"
+description = "Flask fallback API server for TestingServers.com network tools"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.0",
+    "flask-cors>=4.0",
+    "dnspython>=2.6",
+    "requests>=2.31",
+    "cryptography>=42.0",
+]
+
+[project.scripts]
+serve = "app:main"

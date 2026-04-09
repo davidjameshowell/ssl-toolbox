@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Tools — TestingServers.com</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4/dist/js-yaml.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-900 font-sans antialiased h-screen flex overflow-hidden">
+
+    <div id="sidebar" class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0"></div>
+
+    <div class="flex-1 overflow-y-auto p-8 relative">
+
+        <div id="encoderTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Encoder / Decoder</h2>
+                <p class="text-slate-500 leading-relaxed">Convert text between Base64, URL encoding, HTML entities, Hex, and more.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Mode</label>
+                        <select id="encoderMode" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="base64">Base64</option><option value="base64url">Base64URL</option><option value="url">URL Encoding</option><option value="html">HTML Entities</option><option value="hex">Hex</option></select>
+                    </div>
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Direction</label>
+                        <select id="encoderDirection" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="encode">Encode</option><option value="decode">Decode</option></select>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Input</label><textarea id="encoderInput" class="w-full h-32 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Type or paste text..."></textarea></div>
+                <div class="flex gap-3 items-center"><label class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold py-2 px-4 rounded-lg text-sm cursor-pointer">Upload File<input type="file" id="encoderFile" class="hidden"></label><span id="encoderStatus" class="text-xs text-red-600"></span></div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Output</label><textarea id="encoderOutput" readonly class="w-full h-32 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg bg-slate-50 resize-none"></textarea></div>
+                <button id="encoderCopy" class="text-sm text-blue-600 hover:text-blue-800 font-semibold">Copy Output</button>
+            </div>
+        </div>
+
+        <div id="hashTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Hash Generator</h2>
+                <p class="text-slate-500 leading-relaxed">Compute SHA-1, SHA-256, SHA-384, SHA-512, and HMAC hashes. MD5 requires the PKI page (WASM).</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Text Input</label><textarea id="hashInput" class="w-full h-32 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Enter text to hash..."></textarea></div>
+                <div class="flex gap-3 items-center">
+                    <label class="block text-sm font-semibold text-slate-700">Or select a file:</label>
+                    <input type="file" id="hashFile" class="text-sm text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 border border-slate-200 rounded-lg cursor-pointer bg-slate-50">
+                </div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">HMAC Key (optional)</label><input type="text" id="hashHmacKey" placeholder="Enter HMAC secret key" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                <button id="hashBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors">Compute Hashes</button>
+            </div>
+            <div id="hashResults" class="mt-6"></div>
+            <div class="mt-8 border-t border-slate-200 pt-8">
+                <h3 class="text-lg font-bold text-slate-800 mb-4">Compare Hashes</h3>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="text" id="hashCompare1" placeholder="Hash 1" class="px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono">
+                    <input type="text" id="hashCompare2" placeholder="Hash 2" class="px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono">
+                </div>
+                <button id="hashCompareBtn" class="mt-3 bg-slate-700 hover:bg-slate-800 text-white font-semibold py-2.5 px-4 rounded-lg text-sm">Compare</button>
+                <div id="hashCompareResult" class="mt-3"></div>
+            </div>
+        </div>
+
+        <div id="dataconvTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Data Format Converter</h2>
+                <p class="text-slate-500 leading-relaxed">Convert between JSON, YAML, XML, and CSV. Beautify or minify JSON.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">From</label>
+                        <select id="dataconvFrom" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="auto">Auto-detect</option><option value="json">JSON</option><option value="yaml">YAML</option><option value="xml">XML</option><option value="csv">CSV</option></select>
+                    </div>
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">To</label>
+                        <select id="dataconvTo" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="json">JSON (pretty)</option><option value="json-min">JSON (minified)</option><option value="yaml">YAML</option><option value="xml">XML</option><option value="csv">CSV</option></select>
+                    </div>
+                </div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Input</label><textarea id="dataconvInput" class="w-full h-40 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Paste data here..."></textarea></div>
+                <button id="dataconvConvertBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors">Convert</button>
+                <p id="dataconvStatus" class="text-xs mt-2"></p>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Output</label><textarea id="dataconvOutput" readonly class="w-full h-40 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg bg-slate-50 resize-none"></textarea></div>
+                <button id="dataconvCopy" class="text-sm text-blue-600 hover:text-blue-800 font-semibold">Copy Output</button>
+            </div>
+        </div>
+
+        <div id="regexTab" class="max-w-3xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Regex Tester</h2>
+                <p class="text-slate-500 leading-relaxed">Test regular expressions with real-time match highlighting and capture group display.</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="flex gap-3">
+                    <div class="flex-1"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Pattern</label><input type="text" id="regexPattern" placeholder="[a-z]+" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"></div>
+                    <div class="w-24"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Flags</label><input type="text" id="regexFlags" value="g" placeholder="gim" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-mono"></div>
+                </div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Test String</label><textarea id="regexTestString" class="w-full h-32 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none bg-slate-50" placeholder="Enter text to test against..."></textarea></div>
+                <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Highlighted</label><div id="regexHighlight" class="w-full min-h-[80px] p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg bg-white whitespace-pre-wrap break-words"></div></div>
+            </div>
+            <div id="regexResults" class="mt-6"></div>
+        </div>
+
+        <div id="diffTab" class="max-w-5xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">Text Diff</h2>
+                <p class="text-slate-500 leading-relaxed">Compare two text inputs and see additions and removals highlighted.</p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <div class="bg-slate-700 px-4 py-3"><h3 class="text-white font-medium text-sm">Original</h3></div>
+                    <textarea id="diffLeft" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs text-slate-700 focus:outline-none resize-none bg-slate-50" placeholder="Paste original text..."></textarea>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+                    <div class="bg-slate-700 px-4 py-3"><h3 class="text-white font-medium text-sm">Modified</h3></div>
+                    <textarea id="diffRight" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs text-slate-700 focus:outline-none resize-none bg-slate-50" placeholder="Paste modified text..."></textarea>
+                </div>
+            </div>
+            <button id="diffCompareBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-lg text-sm">Compare</button>
+            <div id="diffResults" class="mt-6"></div>
+        </div>
+
+        <div id="uuidTab" class="max-w-2xl mx-auto hidden">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-slate-800 mb-2">UUID &amp; Random Generator</h2>
+                <p class="text-slate-500 leading-relaxed">Generate UUIDs (v4, v7), random hex, base64, and byte sequences using crypto.getRandomValues().</p>
+            </div>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-4">
+                <div class="grid grid-cols-3 gap-4">
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Type</label>
+                        <select id="uuidType" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white"><option value="uuidv4">UUID v4</option><option value="uuidv7">UUID v7</option><option value="hex">Random Hex</option><option value="base64">Random Base64</option><option value="bytes">Random Bytes</option></select>
+                    </div>
+                    <div><label class="block text-sm font-semibold text-slate-700 mb-1.5">Count</label><input type="number" id="uuidCount" value="1" min="1" max="1000" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                    <div id="uuidLengthGroup" class="hidden"><label class="block text-sm font-semibold text-slate-700 mb-1.5">Length</label><input type="number" id="uuidLength" value="32" min="1" max="1024" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm"></div>
+                </div>
+                <button id="uuidGenerateBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors">Generate</button>
+                <textarea id="uuidOutput" readonly class="w-full h-40 p-4 font-mono text-xs text-slate-700 border border-slate-200 rounded-lg bg-slate-50 resize-none"></textarea>
+                <button id="uuidCopy" class="text-sm text-blue-600 hover:text-blue-800 font-semibold">Copy Output</button>
+            </div>
+        </div>
+
+    </div>
+
+    <script>window.__PAGE = 'devtools';</script>
+    <script type="module">
+        import { injectLayout } from './js/layout.js';
+        import { createSwitchTab, activateFromHash } from './js/navigation.js';
+        import { initVaultBindings, updateVaultUI } from './js/vault.js';
+        import { initEncoderTool } from './js/tools/encoder.js';
+        import { initHashTool } from './js/tools/hash.js';
+        import { initDataconvTool } from './js/tools/dataconv.js';
+        import { initRegexTool } from './js/tools/regex.js';
+        import { initDiffTool } from './js/tools/diff.js';
+        import { initUuidTool } from './js/tools/uuid.js';
+
+        const TABS = ['encoderTab', 'hashTab', 'dataconvTab', 'regexTab', 'diffTab', 'uuidTab'];
+        createSwitchTab(TABS);
+        injectLayout();
+        initVaultBindings();
+        updateVaultUI();
+        initEncoderTool(); initHashTool(); initDataconvTool();
+        initRegexTool(); initDiffTool(); initUuidTool();
+        activateFromHash(TABS);
+    </script>
+</body>
+</html>

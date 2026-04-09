@@ -11,7 +11,18 @@ activate = 1
 activate = 1
 `;
 
-export const vaultStore = [];
+// Vault: hydrate from sessionStorage so items survive page navigation.
+function _loadVault() {
+    try {
+        const raw = sessionStorage.getItem('__vault');
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+}
+export const vaultStore = _loadVault();
+
+export function persistVault() {
+    try { sessionStorage.setItem('__vault', JSON.stringify(vaultStore)); } catch {}
+}
 
 export const appState = {
     extractedCertPem: null,
