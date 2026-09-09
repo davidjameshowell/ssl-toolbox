@@ -182,7 +182,11 @@
             </button>
             <button onclick="switchTab('matcherTab')" id="nav-matcherTab" class="nav-item">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                Key Matcher &amp; Unlocker
+                Key Matcher
+            </button>
+            <button onclick="switchTab('decryptorTab')" id="nav-decryptorTab" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                Key Decryptor
             </button>
             <button onclick="switchTab('converterTab')" id="nav-converterTab" class="nav-item">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
@@ -195,11 +199,12 @@
                 <div class="flex items-center justify-between mb-2.5 px-1">
                     <h3 class="eyebrow">Memory Vault</h3>
                     <div class="flex items-center gap-1.5">
-                        <button id="vaultUploadBtn" title="Upload file to vault" class="btn-mini">Upload</button>
+                        <button id="vaultUploadBtn" title="Upload PEM file to vault" class="btn-mini">Upload</button>
                         <button id="vaultClearBtn" title="Clear all vault items" class="btn-mini !bg-red-50 !border-red-200 !text-red-600 hover:!bg-red-100 dark:!bg-red-500/10 dark:!border-red-500/20 dark:!text-red-300 dark:hover:!bg-red-500/20">Clear</button>
-                        <input type="file" id="vaultUploadInput" class="hidden" multiple>
+                        <input type="file" id="vaultUploadInput" class="hidden" multiple accept=".pem,.cer,.crt,.key,.csr,.p7b,.p7c,.txt">
                     </div>
                 </div>
+                <div id="vaultNote" class="hidden px-1 mb-2 text-[11px] leading-snug text-amber-600 dark:text-amber-400"></div>
                 <ul id="sidebarStoreList" class="space-y-2">
                     <li class="vault-empty">Vault is empty</li>
                 </ul>
@@ -323,8 +328,21 @@
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Key Matcher &amp; Unlocker</h3>
-                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Match keys to certs — or unlock an encrypted PEM key.</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Key Matcher</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Verify a private key belongs to a certificate or CSR.</p>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                    </div>
+                </button>
+
+                <button onclick="switchTab('decryptorTab')" class="group card p-6 text-left hover:shadow-pop hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all cursor-pointer sm:col-span-2">
+                    <div class="flex items-start gap-4">
+                        <div class="chip-sky">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Key Decryptor</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Unlock an encrypted PEM key to cleartext with its password.</p>
                         </div>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
@@ -362,7 +380,7 @@
 
                 <div id="passwordGroup" class="hidden opacity-0 transition-opacity duration-300">
                     <label for="pfxPass" class="field-label">Archive password</label>
-                    <input type="password" id="pfxPass" placeholder="Enter password to decrypt" class="input" autocomplete="off">
+                    <input type="password" id="pfxPass" data-reveal placeholder="Enter password to decrypt" class="input" autocomplete="off">
                 </div>
 
                 <button id="unlockBtn" class="btn-primary hidden mt-2">
@@ -429,8 +447,8 @@
         <div id="matcherTab" class="max-w-5xl mx-auto hidden">
             <div class="mb-8">
                 <p class="eyebrow mb-2">Pairs &amp; private keys</p>
-                <h2 class="tab-title">Key Matcher &amp; Unlocker</h2>
-                <p class="lede">Paste any combination of certificate, private key, or CSR on each side — public keys are extracted and compared. You can also unlock a single encrypted private key below, all offline in WebAssembly OpenSSL.</p>
+                <h2 class="tab-title">Key Matcher</h2>
+                <p class="lede">Paste a certificate, private key, or CSR on each side — public keys are extracted and compared to verify they belong to the same pair. To remove a key&rsquo;s password instead, use the Key Decryptor.</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
@@ -458,7 +476,7 @@
             <div class="max-w-md mx-auto card p-6">
                 <div class="mb-4">
                     <label for="matchPass" class="field-label">Private key password <span class="font-normal text-slate-400 dark:text-slate-500">(optional)</span></label>
-                    <input type="password" id="matchPass" placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
+                    <input type="password" id="matchPass" data-reveal placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
                 </div>
                 <button id="compareBtn" class="btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -467,18 +485,35 @@
             </div>
 
             <div id="matchResult" class="mt-6 max-w-md mx-auto hidden"></div>
+        </div>
 
-            <div class="max-w-2xl mx-auto mt-10 card p-6 sm:p-8">
-                <h3 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white mb-1">Encrypted key unlocker</h3>
-                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-5">Upload or paste an encrypted PEM key, enter its password above, then unlock to cleartext. The password never leaves your browser — decryption runs inside the WebAssembly sandbox.</p>
+        <div id="decryptorTab" class="max-w-2xl mx-auto hidden">
+            <div class="mb-8">
+                <p class="eyebrow mb-2">Passwords off keys</p>
+                <h2 class="tab-title">Key Decryptor</h2>
+                <p class="lede">Remove the password from an encrypted PEM private key. Paste it below, load it from the Vault, or upload the file — then enter its password and unlock. Everything runs offline in WebAssembly OpenSSL.</p>
+            </div>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                    <div>
-                        <label for="decryptSource" class="field-label">Key source</label>
-                        <select id="decryptSource" class="select">
-                            <option value="input1">Use Input 1</option>
-                            <option value="input2">Use Input 2</option>
+            <div class="card p-6 sm:p-8">
+                <div class="card overflow-hidden flex flex-col !rounded-xl !shadow-none mb-5">
+                    <div class="bg-slate-800 dark:bg-black/40 px-4 py-3 flex items-center justify-between gap-3">
+                        <h3 class="text-white font-medium text-sm">Encrypted private key</h3>
+                        <select id="decryptorVaultSelect" class="text-xs rounded-lg border-0 py-1 px-2 text-slate-800 bg-white/95 hover:bg-white cursor-pointer max-w-[150px] truncate shadow-sm outline-none">
+                            <option value="">Load Vault…</option>
                         </select>
+                    </div>
+                    <textarea id="decryptorInput" spellcheck="false" class="w-full h-56 p-4 font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-black/30 focus:outline-none focus:ring-0 resize-none placeholder-slate-400 dark:placeholder-slate-600" placeholder="-----BEGIN ENCRYPTED PRIVATE KEY-----&#10;MIIBvTBXBgkqhkiG9w0BBQ0wSjApBgkqhkiG9w0BBQwwHAQ…"></textarea>
+                </div>
+
+                <div class="flex items-center gap-3 mb-5">
+                    <span class="text-[11px] font-bold text-slate-400 dark:text-slate-500">OR</span>
+                    <input type="file" id="decryptFile" accept=".pem,.key,.txt,.key.pem" class="file flex-1" aria-label="Upload encrypted key file">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+                    <div>
+                        <label for="decryptorPass" class="field-label">Key password</label>
+                        <input type="password" id="decryptorPass" data-reveal placeholder="Password for this key" class="input" autocomplete="off">
                     </div>
                     <div>
                         <label for="decryptFormat" class="field-label">Output format</label>
@@ -490,17 +525,12 @@
                     </div>
                 </div>
 
-                <div class="mb-5">
-                    <label for="decryptFile" class="field-label">Or upload key file <span class="font-normal text-slate-400 dark:text-slate-500">(fills selected input)</span></label>
-                    <input type="file" id="decryptFile" accept=".pem,.key,.txt,.key.pem" class="file">
-                </div>
-
                 <button id="decryptBtn" class="btn-success">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                     Unlock key
                 </button>
                 <div id="decryptStatus" class="status-busy hidden"></div>
-                <div id="decryptInfo" class="hidden mt-3 mx-auto w-max max-w-full text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full px-3 py-1 truncate"></div>
+                <div id="decryptInfo" class="hidden mt-3 text-xs font-mono leading-relaxed text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 break-words"></div>
 
                 <div class="mt-5">
                     <label for="decryptOutput" class="field-label">Unlocked key (cleartext PEM)</label>
@@ -542,6 +572,7 @@
                         </select>
                     </div>
                 </div>
+                <p id="convFormatNote" class="text-xs text-slate-500 dark:text-slate-400 -mt-2"></p>
 
                 <div>
                     <label class="field-label" id="convCertLabel">Certificate source</label>
@@ -566,12 +597,12 @@
 
                     <div class="mt-4">
                         <label for="convKeyPass" class="field-label">Private key password <span class="font-normal text-slate-400 dark:text-slate-500">(if key is encrypted)</span></label>
-                        <input type="password" id="convKeyPass" placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
+                        <input type="password" id="convKeyPass" data-reveal placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
                     </div>
 
                     <div class="mt-4">
                         <label for="convPass" class="field-label">New PFX password</label>
-                        <input type="password" id="convPass" placeholder="Set a password for the new PFX" class="input" autocomplete="off">
+                        <input type="password" id="convPass" data-reveal placeholder="Set a password for the new PFX" class="input" autocomplete="off">
                     </div>
                 </div>
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLogicalChain, decodeCertBlock, decodeCsrBlock } from '../js/tools/decoder.js';
+import { buildLogicalChain, decodeCertBlock, decodeCsrBlock, decodeEmptyNote } from '../js/tools/decoder.js';
 import { parseCertMetadata, parseCsrMetadata } from '../js/utils/cert.js';
 import { genSelfSignedCert, genCsr } from './helpers/openssl.js';
 import { getOpenSSLFactory } from './helpers/wasm.js';
@@ -51,5 +51,12 @@ describe('decoder', () => {
 
     it('rejects garbage as CSR', async () => {
         await assert.rejects(() => decodeCsrBlock('-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----', getOpenSSLFactory()));
+    });
+
+    it('explains empty input instead of rendering nothing', () => {
+        assert.equal(decodeEmptyNote(false), '');
+        const note = decodeEmptyNote(true);
+        assert.match(note, /No certificates or CSRs detected/);
+        assert.match(note, /BEGIN CERTIFICATE/);
     });
 });

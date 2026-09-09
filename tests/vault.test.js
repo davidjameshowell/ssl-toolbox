@@ -17,8 +17,8 @@ describe('memory vault', () => {
     });
 
     it('dedupes identical data', () => {
-        saveToVault('a', 'cert', 'same');
-        saveToVault('b', 'cert', 'same');
+        assert.equal(saveToVault('a', 'cert', 'same'), true);
+        assert.equal(saveToVault('b', 'cert', 'same'), false);
         assert.equal(vaultStore.length, 1);
     });
 

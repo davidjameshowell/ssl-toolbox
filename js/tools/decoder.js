@@ -71,7 +71,7 @@ function renderCsrNode(csr) {
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
                                 <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Certificate Signing Request</span>
-                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'csr', '${b64Pem}')" class="btn-mini">Save to Vault</button>
+                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'csr', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
                             </div>
                             <span class="font-bold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${csr.pubkeyAlg ? `${pubkeyLabel(csr)} public key` : 'Public key details unavailable'}</span>
@@ -132,7 +132,7 @@ function renderChainNode(cert, index) {
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
                                 <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${label}</span>
-                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'cert', '${b64Pem}')" class="btn-mini">Save to Vault</button>
+                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'cert', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
                             </div>
                             <span class="font-bold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Issuer: ${cert.issuerCN || cert.issuer}</span>
@@ -314,11 +314,27 @@ async function executePemChainDecode(blocks) {
     }
 }
 
+export function decodeEmptyNote(hasText) {
+    if (!hasText) return '';
+    return `<div class="rounded-2xl border border-dashed border-slate-300 dark:border-white/15 px-5 py-6 text-center">`
+        + `<p class="text-sm font-semibold text-slate-700 dark:text-slate-300">No certificates or CSRs detected</p>`
+        + `<p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Paste a PEM block starting with <span class="font-mono">-----BEGIN CERTIFICATE-----</span> or pick one from the Vault.</p>`
+        + `</div>`;
+}
+
 export function initDecoderTool() {
-    window.saveToVaultFromUI = (label, type, rawPem) => {
+    window.saveToVaultFromUI = (label, type, rawPem, btn) => {
         const pem = decodeURIComponent(escape(window.atob(rawPem)));
-        saveToVault(label, type, pem);
-        alert(`Saved "${label}" to Memory Vault!`);
+        const added = saveToVault(label, type, pem);
+        if (btn) {
+            const orig = btn.textContent;
+            btn.textContent = added ? 'Saved' : 'Already in Vault';
+            btn.disabled = true;
+            setTimeout(() => {
+                btn.textContent = orig;
+                btn.disabled = false;
+            }, 2000);
+        }
     };
 
     document.getElementById('pemInput').addEventListener('input', (e) => {
@@ -330,7 +346,7 @@ export function initDecoderTool() {
 
         const blocks = pemText.match(/-----BEGIN (?:CERTIFICATE|CERTIFICATE REQUEST)-----[\s\S]*?-----END (?:CERTIFICATE|CERTIFICATE REQUEST)-----/g);
         if (!blocks || blocks.length === 0) {
-            resultsContainer.innerHTML = '';
+            resultsContainer.innerHTML = decodeEmptyNote(pemText.trim() !== '');
             loader.classList.add('hidden');
             return;
         }

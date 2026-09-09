@@ -31,7 +31,8 @@ PKI Toolkit is a fully client-side web application that brings the full power of
 |---|---|
 | **Cert Decoder** | Paste PEM certificates and CSRs to inspect subject, issuer, SANs, serial number, signature algorithm, public key, key usages, SHA-256 fingerprint, and expiry status. Chains are sorted leaf→root automatically. |
 | **PFX Extractor** | Upload a `.pfx` or `.p12` archive (optionally password-protected) to extract the certificate chain and private key as PEM files. Multi-cert chains list every certificate; certs-only archives work too. Results are auto-saved to the Memory Vault. |
-| **Key Matcher & Unlocker** | Verify that a private key corresponds to a certificate or CSR by extracting and comparing public keys. Supports encrypted keys. Includes an Encrypted Key Unlocker: upload/paste an encrypted PEM key + password to get cleartext PEM (text + file download), with auto PKCS#8/Traditional detection. |
+| **Key Matcher** | Verify that a private key corresponds to a certificate or CSR by extracting and comparing public keys. Supports encrypted keys. |
+| **Key Decryptor** | Remove the password from an encrypted PEM private key: paste, load from the Vault, or upload the file, enter its password, and get cleartext PEM (text + file download), with auto PKCS#8/Traditional detection and a key-info summary. |
 | **Cert Converter** | Convert between PEM, DER, P7B / PKCS#7 (including P7B unpacking back to PEM), and PFX / PKCS#12 formats entirely in-browser. PFX builds accept an optional private-key password for encrypted keys. |
 | **Memory Vault** | A session-scoped in-memory store. Save certs, keys, and CSRs between tools without re-uploading. Supports manual upload (auto-detects cert vs key vs CSR), per-item open-in-tool / download / remove, and one-click clear. Cleared on tab close. |
 
@@ -67,9 +68,12 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 │   │   ├── decoder.js              # Certificate Decoder tool
 │   │   ├── pfx.js                  # PFX Extractor tool
 │   │   ├── matcher.js              # Key Matcher tool
+│   │   ├── decryptor.js            # Key Decryptor tool
 │   │   └── converter.js            # Certificate Converter tool
 │   └── utils/
 │       ├── cert.js                 # Certificate metadata parsing helpers
+│       ├── decrypt.js              # Encrypted-key decrypt/inspect helpers
+│       ├── reveal.js               # Password show/hide toggle helper
 │       └── download.js             # Browser download helper
 ├── vendor/
 │   └── openssl/

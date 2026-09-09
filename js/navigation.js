@@ -1,5 +1,5 @@
 export function switchTab(tabId) {
-    ['homeTab', 'localTab', 'pfxTab', 'decoderTab', 'matcherTab', 'converterTab'].forEach((id) => {
+    ['homeTab', 'localTab', 'pfxTab', 'decoderTab', 'matcherTab', 'decryptorTab', 'converterTab'].forEach((id) => {
         document.getElementById(id).classList.add('hidden');
     });
     document.getElementById(tabId).classList.remove('hidden');
@@ -7,7 +7,7 @@ export function switchTab(tabId) {
     const inactiveClass = 'nav-item';
     const activeClass = 'nav-item nav-active';
 
-    ['pfxTab', 'decoderTab', 'matcherTab', 'converterTab'].forEach((id) => {
+    ['pfxTab', 'decoderTab', 'matcherTab', 'decryptorTab', 'converterTab'].forEach((id) => {
         document.getElementById(`nav-${id}`).className = inactiveClass;
     });
     const activeNav = document.getElementById(`nav-${tabId}`);

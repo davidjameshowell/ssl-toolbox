@@ -17,12 +17,13 @@ export function vaultItemTarget(type) {
 }
 
 export function saveToVault(label, type, data) {
-    if (!data) return;
-    if (vaultStore.some((item) => item.data === data)) return;
+    if (!data) return false;
+    if (vaultStore.some((item) => item.data === data)) return false;
 
     const id = `vitem_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     vaultStore.push({ id, label, type, data });
     updateVaultUI();
+    return true;
 }
 
 export function getVaultItemById(id) {
@@ -78,7 +79,7 @@ export function updateVaultUI() {
         }).join('');
     }
 
-    const dropdowns = ['decoderVaultSelect', 'match1VaultSelect', 'match2VaultSelect', 'convCertVaultSelect', 'convKeyVaultSelect'];
+    const dropdowns = ['decoderVaultSelect', 'match1VaultSelect', 'match2VaultSelect', 'decryptorVaultSelect', 'convCertVaultSelect', 'convKeyVaultSelect'];
     dropdowns.forEach((id) => {
         const select = document.getElementById(id);
         if (!select) return;
@@ -94,8 +95,34 @@ export function updateVaultUI() {
     });
 }
 
+function vaultNote(msg) {
+    if (typeof document === 'undefined') return;
+    const note = document.getElementById('vaultNote');
+    if (!note) return;
+    note.textContent = msg;
+    note.classList.remove('hidden');
+    clearTimeout(vaultNote._t);
+    vaultNote._t = setTimeout(() => note.classList.add('hidden'), 4000);
+}
+
 export function initVaultBindings() {
-    document.getElementById('vaultClearBtn').addEventListener('click', () => {
+    const clearBtn = document.getElementById('vaultClearBtn');
+    let clearArmed = false;
+    let clearTimer = null;
+    const disarmClear = () => {
+        clearArmed = false;
+        clearBtn.textContent = 'Clear';
+        clearTimeout(clearTimer);
+    };
+    clearBtn.addEventListener('click', () => {
+        if (vaultStore.length === 0) return;
+        if (!clearArmed) {
+            clearArmed = true;
+            clearBtn.textContent = 'Sure?';
+            clearTimer = setTimeout(disarmClear, 3000);
+            return;
+        }
+        disarmClear();
         clearVault();
     });
 
@@ -127,7 +154,11 @@ export function initVaultBindings() {
         files.forEach((file) => {
             const reader = new FileReader();
             reader.onload = (evt) => {
-                const content = evt.target.result;
+                const content = String(evt.target.result || '');
+                if (!content.includes('BEGIN ')) {
+                    vaultNote(`Skipped ${file.name}: not a PEM file.`);
+                    return;
+                }
                 const label = file.name.replace(/\.[^.]+$/, '');
                 saveToVault(label, detectVaultType(content), content);
             };
@@ -159,6 +190,20 @@ export function initVaultBindings() {
             e.target.value = '';
         });
     });
+
+    const decryptorVaultSelect = document.getElementById('decryptorVaultSelect');
+    const decryptFile = document.getElementById('decryptFile');
+    if (decryptorVaultSelect) {
+        decryptorVaultSelect.addEventListener('change', (e) => {
+            if (!e.target.value) return;
+            const item = getVaultItemById(e.target.value);
+            if (!item) return;
+
+            document.getElementById('decryptorInput').value = item.data;
+            if (decryptFile) decryptFile.value = '';
+            e.target.value = '';
+        });
+    }
 
     document.getElementById('convCertVaultSelect').addEventListener('change', (e) => {
         if (e.target.value) {

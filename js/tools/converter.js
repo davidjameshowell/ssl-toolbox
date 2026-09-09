@@ -92,68 +92,132 @@ export async function runConversion({ certBytes, keyBytes = null, fromType, toTy
     }
 }
 
+const FORMAT_LABELS = { pem: 'PEM', der: 'DER', p7b: 'P7B' };
+
+export function detectSourceFormat(sample) {
+    const text = String(sample || '');
+    if (text.includes('-----BEGIN PKCS7-----')) return 'p7b';
+    if (text.includes('-----BEGIN CERTIFICATE-----')) return 'pem';
+    return 'der';
+}
+
+/**
+ * Pure validation for the converter form. Returns {ok, hint}; hint is the
+ * human-readable reason the Convert button is disabled ('' when ready).
+ */
+export function validateConversionState({ hasCert, hasKey, fromType, toType }) {
+    if (!hasCert) return { ok: false, hint: 'Select a certificate above to continue.' };
+    if (fromType === toType) return { ok: false, hint: 'Pick two different formats to convert between.' };
+    if (fromType === 'p7b' && toType !== 'pem') return { ok: false, hint: 'P7B containers can only be unpacked to PEM.' };
+    if (toType === 'pfx' && !hasKey) return { ok: false, hint: 'PFX output needs a private key below.' };
+    return { ok: true, hint: '' };
+}
+
 export function initConverterTool() {
-    document.getElementById('convToType').addEventListener('change', (e) => {
+    const fromSelect = document.getElementById('convFromType');
+    const toSelect = document.getElementById('convToType');
+    const fileInput = document.getElementById('convFile');
+    const keyInput = document.getElementById('convKeyFile');
+    const vaultCertSelect = document.getElementById('convCertVaultSelect');
+    const vaultKeySelect = document.getElementById('convKeyVaultSelect');
+    const formatNote = document.getElementById('convFormatNote');
+    const convertBtn = document.getElementById('convertBtn');
+
+    const setFormatNote = (mode, value) => {
+        if (!formatNote) return;
+        const label = FORMAT_LABELS[value] || value;
+        formatNote.textContent = mode === 'detected'
+            ? `Source format detected: ${label} — change Current format to override.`
+            : `Source format: ${label} (your selection).`;
+    };
+
+    const refreshValidation = () => {
+        const state = validateConversionState({
+            hasCert: (fileInput.files.length > 0) || !!vaultCertSelect.value,
+            hasKey: (keyInput.files.length > 0) || !!vaultKeySelect.value,
+            fromType: fromSelect.value,
+            toType: toSelect.value,
+        });
+        convertBtn.disabled = !state.ok;
+        if (formatNote && !state.ok && (fromSelect.value === toSelect.value || (fromSelect.value === 'p7b' && toSelect.value !== 'pem'))) {
+            formatNote.textContent = state.hint;
+        }
+        return state;
+    };
+
+    toSelect.addEventListener('change', (e) => {
         const keyGroup = document.getElementById('convKeyGroup');
         if (e.target.value === 'pfx') {
             keyGroup.classList.remove('hidden');
         } else {
             keyGroup.classList.add('hidden');
         }
+        refreshValidation();
+    });
+    fromSelect.addEventListener('change', () => {
+        setFormatNote('manual', fromSelect.value);
+        refreshValidation();
     });
 
-    document.getElementById('convFile').addEventListener('change', (e) => {
+    fileInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
+        refreshValidation();
         if (!file) return;
 
         const ext = file.name.split('.').pop().toLowerCase();
-        const fromSelect = document.getElementById('convFromType');
-
         if (['der', 'cer', 'crt', 'p7b', 'p7c'].includes(ext)) {
             const reader = new FileReader();
             reader.onload = (evt) => {
-                const text = evt.target.result;
-                if (text.includes('-----BEGIN PKCS7-----')) {
-                    fromSelect.value = 'p7b';
-                } else if (text.includes('-----BEGIN CERTIFICATE-----')) {
-                    fromSelect.value = 'pem';
-                } else {
-                    fromSelect.value = 'der';
-                }
+                fromSelect.value = detectSourceFormat(evt.target.result);
+                setFormatNote('detected', fromSelect.value);
+                refreshValidation();
             };
             reader.readAsText(file.slice(0, 100));
         } else if (ext === 'pem') {
             fromSelect.value = 'pem';
+            setFormatNote('detected', 'pem');
+            refreshValidation();
         }
     });
+    keyInput.addEventListener('change', refreshValidation);
+
+    vaultCertSelect.addEventListener('change', () => {
+        if (!vaultCertSelect.value) {
+            refreshValidation();
+            return;
+        }
+        const item = getVaultItemById(vaultCertSelect.value);
+        if (item && typeof item.data === 'string') {
+            fromSelect.value = detectSourceFormat(item.data);
+            setFormatNote('detected', fromSelect.value);
+        }
+        refreshValidation();
+    });
+    vaultKeySelect.addEventListener('change', refreshValidation);
 
     document.getElementById('convertBtn').addEventListener('click', async () => {
-        const fileInput = document.getElementById('convFile');
-        const keyInput = document.getElementById('convKeyFile');
-        const vaultCertId = document.getElementById('convCertVaultSelect').value;
-        const vaultKeyId = document.getElementById('convKeyVaultSelect').value;
+        const vaultCertId = vaultCertSelect.value;
+        const vaultKeyId = vaultKeySelect.value;
 
-        const fromType = document.getElementById('convFromType').value;
-        const toType = document.getElementById('convToType').value;
+        const fromType = fromSelect.value;
+        const toType = toSelect.value;
         const pfxPass = document.getElementById('convPass').value;
         const keyPassEl = document.getElementById('convKeyPass');
         const keyPass = keyPassEl ? keyPassEl.value : '';
         const btn = document.getElementById('convertBtn');
         const statusDiv = document.getElementById('convStatus');
 
-        const hasCert = fileInput.files.length > 0 || vaultCertId;
-        if (!hasCert) {
-            alert('Please select a certificate source (Vault or File).');
-            return;
-        }
-
-        if (toType === 'pfx' && keyInput.files.length === 0 && !vaultKeyId) {
-            alert('A private key is required to create a PFX/PKCS#12 file.');
-            return;
-        }
-
-        if (fromType === toType) {
-            alert('The current format and target format are the same.');
+        const state = validateConversionState({
+            hasCert: fileInput.files.length > 0 || !!vaultCertId,
+            hasKey: keyInput.files.length > 0 || !!vaultKeyId,
+            fromType,
+            toType,
+        });
+        if (!state.ok) {
+            statusDiv.className = 'status-warn';
+            statusDiv.innerText = state.hint;
+            statusDiv.classList.remove('hidden');
+            refreshValidation();
             return;
         }
 
@@ -204,6 +268,10 @@ export function initConverterTool() {
                 : 'Error: conversion failed. Ensure input files match the selected format.';
         } finally {
             btn.disabled = false;
+            refreshValidation();
         }
     });
+
+    setFormatNote('manual', fromSelect.value);
+    refreshValidation();
 }

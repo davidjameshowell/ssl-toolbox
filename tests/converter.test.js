@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { runConversion } from '../js/tools/converter.js';
+import { runConversion, validateConversionState, detectSourceFormat } from '../js/tools/converter.js';
 import { extractPfxData } from '../js/tools/pfx.js';
 import { extractPublicKey } from '../js/tools/matcher.js';
 import { genSelfSignedCert, genEncryptedKeys, certForKey, makeP7b } from './helpers/openssl.js';
@@ -99,6 +99,36 @@ describe('converter', () => {
         const { rsaEncPem } = genEncryptedKeys();
         await assert.rejects(
             () => runConversion({ certBytes: certPem, keyBytes: rsaEncPem, fromType: 'pem', toType: 'pfx', pfxPass: 'x' }, getOpenSSLFactory())
+        );
+    });
+
+    it('detects source format from PEM headers', () => {
+        assert.equal(detectSourceFormat('-----BEGIN PKCS7-----\nabc'), 'p7b');
+        assert.equal(detectSourceFormat('-----BEGIN CERTIFICATE-----\nabc'), 'pem');
+        assert.equal(detectSourceFormat('binary-blob'), 'der');
+        assert.equal(detectSourceFormat(''), 'der');
+    });
+
+    it('validates the converter form state with hints', () => {
+        assert.deepEqual(
+            validateConversionState({ hasCert: false, hasKey: false, fromType: 'pem', toType: 'der' }),
+            { ok: false, hint: 'Select a certificate above to continue.' }
+        );
+        assert.deepEqual(
+            validateConversionState({ hasCert: true, hasKey: false, fromType: 'pem', toType: 'pem' }),
+            { ok: false, hint: 'Pick two different formats to convert between.' }
+        );
+        assert.deepEqual(
+            validateConversionState({ hasCert: true, hasKey: false, fromType: 'p7b', toType: 'der' }),
+            { ok: false, hint: 'P7B containers can only be unpacked to PEM.' }
+        );
+        assert.deepEqual(
+            validateConversionState({ hasCert: true, hasKey: false, fromType: 'pem', toType: 'pfx' }),
+            { ok: false, hint: 'PFX output needs a private key below.' }
+        );
+        assert.deepEqual(
+            validateConversionState({ hasCert: true, hasKey: true, fromType: 'pem', toType: 'pfx' }),
+            { ok: true, hint: '' }
         );
     });
 });

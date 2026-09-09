@@ -81,7 +81,7 @@ async function processVault(file, password) {
 
     try {
         statusDiv.className = 'status-busy';
-        statusDiv.innerText = 'Extracting vault contents…';
+        statusDiv.innerText = 'Extracting archive contents…';
         unlockBtn.disabled = true;
 
         const buffer = await file.arrayBuffer();
@@ -135,6 +135,7 @@ async function processVault(file, password) {
         if (hasKey) {
             saveToVault(`${safeName} (key)`, 'key', appState.extractedKeyPem);
         }
+        document.getElementById('pfxPass').value = '';
     } catch (err) {
         statusDiv.className = 'status-error';
         statusDiv.innerText = 'Error: invalid password or corrupted file.';
@@ -159,14 +160,15 @@ export function initPfxTool() {
 
         if (!file) return;
 
+        statusDiv.classList.remove('hidden');
         if (typeof window.createOpenSSL === 'undefined') {
-            alert('OpenSSL WebAssembly is loading. Try again in a moment.');
+            statusDiv.className = 'status-warn';
+            statusDiv.innerText = 'OpenSSL is still loading — pick the file again in a moment.';
             return;
         }
 
         statusDiv.className = 'status-busy';
         statusDiv.innerText = 'Checking encryption status…';
-        statusDiv.classList.remove('hidden');
 
         const buffer = await file.arrayBuffer();
         const pfxData = new Uint8Array(buffer);

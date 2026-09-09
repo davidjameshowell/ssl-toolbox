@@ -1,7 +1,4 @@
 import { opensslCnf } from '../state.js';
-import { decryptPrivateKey, inspectKeyInfo, isEncryptedKey, summarizeKeyInfo } from '../utils/decrypt.js';
-import { downloadFile } from '../utils/download.js';
-import { saveToVault } from '../vault.js';
 
 export function detectPemType(pem) {
     if (pem.includes('BEGIN CERTIFICATE REQUEST')) return 'req';
@@ -57,129 +54,7 @@ export async function extractPublicKey(pemText, password, inputName, explicitFac
     }
 }
 
-function initDecryptSection() {
-    const sourceSelect = document.getElementById('decryptSource');
-    const fileInput = document.getElementById('decryptFile');
-    const formatSelect = document.getElementById('decryptFormat');
-    const decryptBtn = document.getElementById('decryptBtn');
-    const outputArea = document.getElementById('decryptOutput');
-    const statusDiv = document.getElementById('decryptStatus');
-    const infoDiv = document.getElementById('decryptInfo');
-    const copyBtn = document.getElementById('decryptCopy');
-    const downloadBtn = document.getElementById('decryptDownload');
-    const saveBtn = document.getElementById('decryptSaveVault');
-    if (!sourceSelect || !decryptBtn || !outputArea) return;
-
-    if (fileInput) {
-        fileInput.addEventListener('change', () => {
-            const file = fileInput.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (evt) => {
-                const text = String(evt.target.result || '');
-                const targetId = sourceSelect.value === 'input2' ? 'matchInput2' : 'matchInput1';
-                document.getElementById(targetId).value = text;
-            };
-            reader.readAsText(file);
-        });
-        sourceSelect.addEventListener('change', () => {
-            fileInput.value = '';
-        });
-    }
-
-    const setStatus = (kind, msg) => {
-        if (!statusDiv) return;
-        statusDiv.classList.remove('hidden');
-        if (kind === 'ok') statusDiv.className = 'status-ok';
-        else if (kind === 'warn') statusDiv.className = 'status-warn';
-        else if (kind === 'error') statusDiv.className = 'status-error';
-        else statusDiv.className = 'status-busy';
-        statusDiv.innerText = msg;
-    };
-
-    decryptBtn.addEventListener('click', async () => {
-        const targetId = sourceSelect.value === 'input2' ? 'matchInput2' : 'matchInput1';
-        const pemText = (document.getElementById(targetId).value || '').trim();
-        const password = document.getElementById('matchPass').value;
-        const format = formatSelect ? formatSelect.value : 'auto';
-
-        if (!pemText) {
-            alert('Select a key source first (paste, load from Vault, or upload a file).');
-            return;
-        }
-
-        decryptBtn.disabled = true;
-        const originalLabel = decryptBtn.innerHTML;
-        decryptBtn.innerHTML = 'Unlocking...';
-        outputArea.value = '';
-        if (infoDiv) infoDiv.classList.add('hidden');
-        setStatus('busy', 'Unlocking key...');
-
-        try {
-            if (pemText.includes('OPENSSH PRIVATE KEY')) {
-                throw new Error('OpenSSH key format is not supported. Convert with `ssh-keygen -p -m PEM -f <key>` first.');
-            }
-            if (!pemText.includes('PRIVATE KEY')) {
-                throw new Error('Not a private key. Expected a PEM block containing "PRIVATE KEY".');
-            }
-            if (!isEncryptedKey(pemText)) {
-                setStatus('warn', 'Note: key does not look encrypted — output will be a (re-encoded) copy.');
-            }
-            const decrypted = await decryptPrivateKey(pemText, password, { format });
-            outputArea.value = decrypted;
-            if (!isEncryptedKey(pemText)) {
-                // keep warn note visible alongside output
-            } else {
-                setStatus('ok', 'Key unlocked successfully. Password was only used inside WASM memory.');
-            }
-            try {
-                const info = await inspectKeyInfo(pemText, { password });
-                const outLabel = format !== 'auto'
-                    ? format
-                    : (/BEGIN (RSA|EC) PRIVATE KEY/.test(decrypted) ? 'traditional' : 'pkcs8');
-                if (infoDiv) {
-                    infoDiv.textContent = summarizeKeyInfo(info, outLabel);
-                    infoDiv.classList.remove('hidden');
-                }
-            } catch (infoErr) {
-                // inspection is informational only — never fail the unlock
-            }
-        } catch (err) {
-            setStatus('error', err.message);
-        } finally {
-            decryptBtn.disabled = false;
-            decryptBtn.innerHTML = originalLabel;
-        }
-    });
-
-    if (copyBtn) {
-        copyBtn.addEventListener('click', async () => {
-            if (!outputArea.value) return;
-            try {
-                await navigator.clipboard.writeText(outputArea.value);
-                setStatus('ok', '✓ Copied to clipboard.');
-            } catch (err) {
-                outputArea.select();
-                document.execCommand('copy');
-            }
-        });
-    }
-    if (downloadBtn) {
-        downloadBtn.addEventListener('click', () => {
-            if (!outputArea.value) return;
-            downloadFile(outputArea.value, 'decrypted-key.pem');
-        });
-    }
-    if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
-            if (!outputArea.value) return;
-            saveToVault('decrypted-key', 'key', outputArea.value);
-        });
-    }
-}
-
 export function initMatcherTool() {
-    initDecryptSection();
     document.getElementById('compareBtn').addEventListener('click', async () => {
         const input1 = document.getElementById('matchInput1').value.trim();
         const input2 = document.getElementById('matchInput2').value.trim();
@@ -188,7 +63,14 @@ export function initMatcherTool() {
         const resultBox = document.getElementById('matchResult');
 
         if (!input1 || !input2) {
-            alert('Please provide PEM data for both Input 1 and Input 2.');
+            resultBox.className = 'result-error';
+            resultBox.innerHTML = `
+                <div>
+                    <h4 class="font-bold">Missing input</h4>
+                    <p class="text-sm opacity-90">Paste a certificate, key, or CSR into both Input 1 and Input 2 — or load them from the Vault.</p>
+                </div>
+            `;
+            resultBox.classList.remove('hidden');
             return;
         }
 

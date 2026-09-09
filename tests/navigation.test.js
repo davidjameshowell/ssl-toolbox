@@ -2,11 +2,11 @@ import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { switchTab } from '../js/navigation.js';
 
-const TABS = ['homeTab', 'localTab', 'pfxTab', 'decoderTab', 'matcherTab', 'converterTab'];
+const TABS = ['homeTab', 'localTab', 'pfxTab', 'decoderTab', 'matcherTab', 'decryptorTab', 'converterTab'];
 
 function installDomStub() {
     const elements = {};
-    for (const id of [...TABS, 'nav-pfxTab', 'nav-decoderTab', 'nav-matcherTab', 'nav-converterTab']) {
+    for (const id of [...TABS, 'nav-pfxTab', 'nav-decoderTab', 'nav-matcherTab', 'nav-decryptorTab', 'nav-converterTab']) {
         elements[id] = { classList: { add(c) { this._c = (this._c || new Set()); this._c.add(c); }, remove(c) { (this._c || new Set()).delete(c); }, contains(c) { return (this._c || new Set()).has(c); } }, className: '' };
         // start visible; switchTab will hide all but target
         elements[id].classList.add('hidden');
@@ -35,5 +35,13 @@ describe('navigation', () => {
         assert.match(els['nav-decoderTab'].className, /nav-active/);
         assert.doesNotMatch(els['nav-matcherTab'].className, /nav-active/);
         assert.match(els['nav-matcherTab'].className, /nav-item/);
+    });
+
+    it('switches to the standalone decryptor tab', () => {
+        const els = installDomStub();
+        switchTab('decryptorTab');
+        assert.equal(els['decryptorTab'].classList.contains('hidden'), false);
+        assert.equal(els['matcherTab'].classList.contains('hidden'), true);
+        assert.match(els['nav-decryptorTab'].className, /nav-active/);
     });
 });
