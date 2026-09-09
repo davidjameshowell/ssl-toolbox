@@ -13,3 +13,6 @@ Dockerfile
 scripts/
 archive/
 README.md
+tests/
+package.json
+package-lock.json

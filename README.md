@@ -29,11 +29,11 @@ PKI Toolkit is a fully client-side web application that brings the full power of
 
 | Tool | Description |
 |---|---|
-| **Cert Decoder** | Paste one or more PEM certificates to inspect subject, issuer, SANs, serial number, and validity dates. Chains are sorted leaf→root automatically. |
-| **PFX Extractor** | Upload a `.pfx` or `.p12` archive (optionally password-protected) to extract the certificate and private key as PEM files. Results are auto-saved to the Memory Vault. |
-| **Key Matcher** | Verify that a private key corresponds to a certificate or CSR by extracting and comparing public keys. Supports encrypted keys. |
-| **Cert Converter** | Convert between PEM, DER, P7B / PKCS#7, and PFX / PKCS#12 formats entirely in-browser. |
-| **Memory Vault** | A session-scoped in-memory store. Save certs and keys between tools without re-uploading. Supports manual upload (auto-detects cert vs key) and one-click clear. Cleared on tab close. |
+| **Cert Decoder** | Paste PEM certificates and CSRs to inspect subject, issuer, SANs, serial number, signature algorithm, public key, key usages, SHA-256 fingerprint, and expiry status. Chains are sorted leaf→root automatically. |
+| **PFX Extractor** | Upload a `.pfx` or `.p12` archive (optionally password-protected) to extract the certificate chain and private key as PEM files. Multi-cert chains list every certificate; certs-only archives work too. Results are auto-saved to the Memory Vault. |
+| **Key Matcher & Unlocker** | Verify that a private key corresponds to a certificate or CSR by extracting and comparing public keys. Supports encrypted keys. Includes an Encrypted Key Unlocker: upload/paste an encrypted PEM key + password to get cleartext PEM (text + file download), with auto PKCS#8/Traditional detection. |
+| **Cert Converter** | Convert between PEM, DER, P7B / PKCS#7 (including P7B unpacking back to PEM), and PFX / PKCS#12 formats entirely in-browser. PFX builds accept an optional private-key password for encrypted keys. |
+| **Memory Vault** | A session-scoped in-memory store. Save certs, keys, and CSRs between tools without re-uploading. Supports manual upload (auto-detects cert vs key vs CSR), per-item open-in-tool / download / remove, and one-click clear. Cleared on tab close. |
 
 ---
 
@@ -237,8 +237,8 @@ Configure the following in **Settings → Secrets and variables → Actions** on
 PKI Toolkit is designed around the principle that users should never need to trust a server with private key material.
 
 - **No server-side crypto.** All OpenSSL operations run inside a WebAssembly sandbox in your browser tab. The WASM runtime enforces a hard boundary: the module cannot open network sockets, read host files, or access any OS resource outside of what the JavaScript host intentionally exposes.
-- **No persistent storage.** The Memory Vault is a plain JavaScript array in the page's runtime memory. It is never written to `localStorage`, `sessionStorage`, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents.
-- **No telemetry.** The application makes no outbound requests with user data. The only outbound requests are for the Tailwind CSS CDN on page load (a standard CDN request with no user data) and Cloudflare's own Wrangler telemetry during deployment (which is unrelated to runtime usage).
+- **No persistent storage.** The Memory Vault is a plain JavaScript array in the page's runtime memory. It is never written to `localStorage`, `sessionStorage`, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents. (The only `localStorage` entry is your light/dark theme choice.)
+- **No telemetry.** The application makes no outbound requests with user data. The only outbound requests are for the Tailwind CSS CDN on page load (a standard CDN request with no user data) and Cloudflare's own Wrangler telemetry during deployment (which is unrelated to runtime usage). Fonts are self-hosted same-origin `woff2` files — no font CDN.
 - **Auditable.** The full source is available in this repository. You can inspect the network activity in DevTools → Network while using any tool to verify no data leaves the browser.
 - **Offline-capable.** Once the page and its assets have loaded, the application works with no network connection.
 

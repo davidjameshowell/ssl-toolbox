@@ -3,275 +3,424 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local PKI Suite</title>
+    <meta name="description" content="PKI Toolkit — browser-based certificate tools powered by WebAssembly OpenSSL. No servers, no uploads; everything runs 100% locally.">
+    <meta name="theme-color" content="#4F46E5">
+    <title>PKI Toolkit</title>
+    <script>
+        // Theme boot: localStorage preference, else OS setting. Runs before paint (no flash).
+        // Only the *theme name* is stored — key material never touches storage.
+        (function () {
+            try {
+                var t = localStorage.getItem('pki-theme');
+                if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    document.documentElement.classList.add('dark');
+                }
+            } catch (e) { /* private mode etc. — fall back to light */ }
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Helvetica Neue', 'Arial', 'sans-serif'],
+                        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'Liberation Mono', 'monospace'],
+                    },
+                    boxShadow: {
+                        card: '0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 16px -4px rgba(15, 23, 42, 0.08)',
+                        pop: '0 8px 30px -6px rgba(79, 70, 229, 0.35)',
+                    },
+                },
+            },
+        };
+    </script>
     <script src="vendor/openssl/openssl.js"></script>
-</head>
-<body class="bg-slate-50 text-slate-900 font-sans antialiased h-screen flex overflow-hidden">
+    <style>
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 400;
+            font-display: swap;
+            src: url('assets/fonts/inter-400.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 500;
+            font-display: swap;
+            src: url('assets/fonts/inter-500.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 600;
+            font-display: swap;
+            src: url('assets/fonts/inter-600.woff2') format('woff2');
+        }
+        @font-face {
+            font-family: 'Inter';
+            font-style: normal;
+            font-weight: 700;
+            font-display: swap;
+            src: url('assets/fonts/inter-700.woff2') format('woff2');
+        }
+        :root { color-scheme: light; }
+        .dark { color-scheme: dark; }
+    </style>
+    <style type="text/tailwindcss">
+        @layer components {
+        .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.14em] text-indigo-600 dark:text-indigo-400; }
+        .tab-title { @apply text-2xl sm:text-3xl font-bold tracking-tight text-slate-900 dark:text-white; }
+        .lede { @apply text-slate-600 dark:text-slate-400 leading-relaxed mt-2 max-w-2xl; }
 
-    <div class="w-64 bg-slate-900 text-white flex flex-col shadow-2xl z-20 shrink-0">
-        <button onclick="switchTab('homeTab')" class="p-6 border-b border-slate-800 text-left w-full hover:bg-slate-800/50 transition-colors group">
-            <h1 class="text-xl font-bold flex items-center gap-2 group-hover:text-blue-300 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        .card { @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-card; }
+
+        .btn { @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950; }
+        .btn-primary { @apply btn w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-3 px-4 text-sm shadow-sm hover:shadow-pop; }
+        .btn-success { @apply btn w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-3 px-4 text-sm shadow-sm; }
+        .btn-ghost { @apply btn bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-white/10 py-2.5 px-4 text-sm; }
+        .btn-danger-soft { @apply btn bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-500/20 py-2.5 px-4 text-sm; }
+        .btn-mini { @apply inline-flex items-center font-semibold text-[11px] px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/25 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+
+        .field-label { @apply block text-[13px] font-semibold text-slate-700 dark:text-slate-300 mb-1.5; }
+        .input { @apply w-full px-4 py-2.5 rounded-xl text-sm bg-white dark:bg-white/5 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 border border-slate-300 dark:border-white/15 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all; }
+        .select { @apply input pr-8 cursor-pointer; }
+        .textarea { @apply input font-mono text-xs leading-relaxed resize-none; }
+        .file { @apply w-full text-sm text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/10 rounded-xl cursor-pointer bg-slate-50 dark:bg-white/5 transition-all file:mr-4 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 dark:file:bg-indigo-500/15 dark:file:text-indigo-300 dark:hover:file:bg-indigo-500/25; }
+
+        .badge { @apply inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border whitespace-nowrap; }
+        .badge-cert { @apply badge bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/25; }
+        .badge-key { @apply badge bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/25; }
+        .badge-csr { @apply badge bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-500/25; }
+        .badge-leaf { @apply badge bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-500/25; }
+        .badge-chain { @apply badge bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10; }
+        .badge-expired { @apply badge bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-300 border-red-200 dark:border-red-500/25; }
+        .badge-expiring { @apply badge bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/25; }
+        .badge-saved { @apply badge bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/25 normal-case tracking-normal text-xs font-semibold; }
+
+        .status { @apply text-center font-medium mt-4 text-sm flex items-center justify-center gap-2; }
+        .status::before { content: ''; width: 0.5rem; height: 0.5rem; border-radius: 9999px; flex-shrink: 0; }
+        .status-ok { @apply status text-emerald-600 dark:text-emerald-400; }
+        .status-ok::before { @apply bg-emerald-500; }
+        .status-warn { @apply status text-amber-600 dark:text-amber-400; }
+        .status-warn::before { @apply bg-amber-500; }
+        .status-error { @apply status text-red-600 dark:text-red-400; }
+        .status-error::before { @apply bg-red-500; }
+        .status-busy { @apply status text-slate-500 dark:text-slate-400 animate-pulse; }
+        .status-busy::before { @apply bg-indigo-500; }
+
+        .result { @apply mt-6 max-w-md mx-auto p-4 rounded-2xl flex items-center gap-4 shadow-card border text-sm; }
+        .result-ok { @apply result bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/25 text-emerald-800 dark:text-emerald-200; }
+        .result-error { @apply result bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/25 text-amber-800 dark:text-amber-200; }
+        .result-mismatch { @apply result bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/25 text-rose-800 dark:text-rose-200; }
+
+        .nav-item { @apply w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+        .nav-item svg { @apply h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500; }
+        .nav-active { @apply bg-indigo-600 hover:bg-indigo-600 text-white hover:text-white shadow-sm; }
+        .nav-active svg { @apply text-white; }
+
+        .icon-chip { @apply p-3 rounded-xl shrink-0 transition-colors; }
+        .chip-sky { @apply icon-chip bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400; }
+        .chip-indigo { @apply icon-chip bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400; }
+        .chip-emerald { @apply icon-chip bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400; }
+        .chip-violet { @apply icon-chip bg-violet-50 dark:bg-violet-500/10 text-violet-600 dark:text-violet-400; }
+        .chip-teal { @apply icon-chip bg-teal-50 dark:bg-teal-500/10 text-teal-600 dark:text-teal-400; }
+
+        .code { @apply font-mono text-xs bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 px-1.5 py-0.5 rounded-md; }
+        .raw-pre { @apply bg-slate-900 dark:bg-black/60 text-emerald-400 rounded-xl p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words border border-slate-800 dark:border-white/10; }
+
+        .kv { @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl overflow-hidden mb-4 shadow-card text-sm; }
+        .kv-row { @apply px-4 py-2.5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-5; }
+        .kv-dt { @apply font-medium text-slate-500 dark:text-slate-400 text-[13px]; }
+        .kv-dd { @apply mt-0.5 text-slate-900 dark:text-slate-100 sm:mt-0 sm:col-span-2 break-all text-sm; }
+
+        .vault-row { @apply bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs shadow-sm; }
+        .vault-empty { @apply text-slate-400 dark:text-slate-500 italic text-xs px-2; }
+        .vault-label { @apply truncate pr-2 font-medium text-left flex-1 min-w-0 text-slate-700 dark:text-slate-200 hover:text-indigo-600 dark:hover:text-indigo-300 cursor-pointer transition-colors; }
+        .vault-mini { @apply flex-1 text-[11px] font-semibold px-2 py-1 rounded-lg transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+        .vault-dl { @apply vault-mini bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/15 text-slate-600 dark:text-slate-300; }
+        .vault-rm { @apply vault-mini bg-red-50 dark:bg-red-500/10 hover:bg-red-100 dark:hover:bg-red-500/20 text-red-600 dark:text-red-300; }
+
+        .mini-card { @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-2.5 text-sm shadow-sm; }
+        .tool-link { @apply text-xs text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors underline underline-offset-2 decoration-dotted; }
+        }
+    </style>
+    <style>
+        details > summary { list-style: none; }
+        details > summary::-webkit-details-marker { display: none; }
+        .tnum { font-variant-numeric: tabular-nums; }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+<body class="bg-[#F6F8FC] dark:bg-[#0B1220] text-slate-900 dark:text-slate-100 font-sans antialiased min-h-screen md:h-screen flex flex-col md:flex-row md:overflow-hidden transition-colors">
+
+    <aside class="w-full md:w-68 md:min-w-68 lg:w-72 lg:min-w-72 bg-white dark:bg-[#0D1526] border-b md:border-b-0 md:border-r border-slate-200 dark:border-white/10 flex flex-col z-20 shrink-0 md:h-screen">
+        <button onclick="switchTab('homeTab')" class="flex items-center gap-3 px-5 py-5 text-left w-full hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
+            <span class="p-2 rounded-xl bg-gradient-to-br from-indigo-600 to-sky-500 shadow-pop shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
-                PKI Toolkit
-            </h1>
+            </span>
+            <span class="min-w-0">
+                <span class="block text-[15px] font-bold tracking-tight text-slate-900 dark:text-white leading-tight">PKI Toolkit</span>
+                <span class="block text-[11px] text-slate-400 dark:text-slate-500 leading-tight mt-0.5">Offline-first · WASM OpenSSL</span>
+            </span>
         </button>
-        
-        <nav class="p-4 space-y-2 shrink-0">
-            <button onclick="switchTab('decoderTab')" id="nav-decoderTab" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white font-medium transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+
+        <nav class="px-3 sm:px-4 py-2 grid grid-cols-2 md:grid-cols-1 gap-1 shrink-0" aria-label="Tools">
+            <button onclick="switchTab('decoderTab')" id="nav-decoderTab" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 Cert Decoder
             </button>
-            <button onclick="switchTab('pfxTab')" id="nav-pfxTab" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white font-medium transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+            <button onclick="switchTab('pfxTab')" id="nav-pfxTab" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                 PFX Extractor
             </button>
-            <button onclick="switchTab('matcherTab')" id="nav-matcherTab" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white font-medium transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                Key Matcher
+            <button onclick="switchTab('matcherTab')" id="nav-matcherTab" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                Key Matcher &amp; Unlocker
             </button>
-            <button onclick="switchTab('converterTab')" id="nav-converterTab" class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white font-medium transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+            <button onclick="switchTab('converterTab')" id="nav-converterTab" class="nav-item">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                 Cert Converter
             </button>
         </nav>
 
-        <div class="flex-1 overflow-y-auto px-4 pb-4">
-            <div class="border-t border-slate-800 pt-4 mt-2">
-                <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Memory Vault</h3>
+        <div class="flex-1 px-3 sm:px-4 py-2 md:overflow-y-auto">
+            <div class="border-t border-slate-200 dark:border-white/10 pt-3 mt-1 pb-3">
+                <div class="flex items-center justify-between mb-2.5 px-1">
+                    <h3 class="eyebrow">Memory Vault</h3>
                     <div class="flex items-center gap-1.5">
-                        <button id="vaultUploadBtn" title="Upload file to vault" class="text-[10px] font-semibold px-2 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors">Upload</button>
-                        <button id="vaultClearBtn" title="Clear all vault items" class="text-[10px] font-semibold px-2 py-1 rounded bg-red-900/50 hover:bg-red-800/60 text-red-400 transition-colors">Clear</button>
+                        <button id="vaultUploadBtn" title="Upload file to vault" class="btn-mini">Upload</button>
+                        <button id="vaultClearBtn" title="Clear all vault items" class="btn-mini !bg-red-50 !border-red-200 !text-red-600 hover:!bg-red-100 dark:!bg-red-500/10 dark:!border-red-500/20 dark:!text-red-300 dark:hover:!bg-red-500/20">Clear</button>
                         <input type="file" id="vaultUploadInput" class="hidden" multiple>
                     </div>
                 </div>
                 <ul id="sidebarStoreList" class="space-y-2">
-                    <li class="text-slate-500 italic text-xs px-2">Vault is empty</li>
+                    <li class="vault-empty">Vault is empty</li>
                 </ul>
             </div>
         </div>
 
-        <button onclick="switchTab('localTab')" class="p-4 text-left w-full border-t border-slate-800 shrink-0 bg-slate-900 group hover:bg-slate-800/60 transition-colors">
-            <span class="flex items-center gap-1.5 text-xs text-emerald-500 group-hover:text-emerald-400 transition-colors">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                100% Local &mdash; How it works
-            </span>
-            <span class="block text-[10px] text-slate-600 mt-0.5">Powered by WebAssembly OpenSSL</span>
-        </button>
-    </div>
+        <div class="p-3 sm:p-4 border-t border-slate-200 dark:border-white/10 shrink-0 flex md:flex-col gap-2">
+            <button id="themeToggleBtn" aria-label="Toggle dark mode" class="btn-ghost !py-2 flex-1 md:w-full text-[13px]">
+                <svg id="themeIconMoon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>
+                <svg id="themeIconSun" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                <span id="themeToggleLabel">Dark mode</span>
+            </button>
+            <button onclick="switchTab('localTab')" class="btn-ghost !py-2 flex-1 md:w-full text-[13px] !text-emerald-600 dark:!text-emerald-400 !border-emerald-200 dark:!border-emerald-500/25 hover:!bg-emerald-50 dark:hover:!bg-emerald-500/10">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                100% Local — how it works
+            </button>
+        </div>
+    </aside>
 
-    <div class="flex-1 overflow-y-auto p-8 relative">
+    <main class="flex-1 md:h-screen md:overflow-y-auto px-5 py-8 sm:p-10 relative">
 
         <div id="localTab" class="max-w-3xl mx-auto hidden pb-12">
             <div class="mb-8">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="p-2 rounded-lg bg-emerald-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
-                    </div>
-                    <h2 class="text-3xl font-bold text-slate-800">Why 100% Local?</h2>
-                </div>
-                <p class="text-slate-500 leading-relaxed">Every certificate operation in this toolkit runs entirely inside your browser. Nothing is ever sent to a server.</p>
+                <p class="eyebrow mb-2">Privacy architecture</p>
+                <h2 class="tab-title">Why 100% local?</h2>
+                <p class="lede">Every certificate operation in this toolkit runs entirely inside your browser. Nothing is ever sent to a server.</p>
             </div>
 
-            <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 mb-6">
-                <h3 class="font-bold text-emerald-800 mb-3 flex items-center gap-2">
+            <div class="rounded-2xl p-6 mb-6 border bg-emerald-50 border-emerald-200 dark:bg-emerald-500/10 dark:border-emerald-500/25">
+                <h3 class="font-bold text-emerald-800 dark:text-emerald-300 mb-3 flex items-center gap-2 text-[15px]">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                    TL;DR
+                    The short version
                 </h3>
-                <ul class="space-y-2.5 text-sm text-emerald-900">
-                    <li class="flex items-start gap-2"><span class="text-emerald-500 font-bold mt-0.5 shrink-0">&#10003;</span><span>Your certificate files, private keys, and passwords <strong class="font-semibold">never leave your device</strong> &mdash; there is no backend server receiving them.</span></li>
-                    <li class="flex items-start gap-2"><span class="text-emerald-500 font-bold mt-0.5 shrink-0">&#10003;</span><span>All cryptographic operations (decryption, parsing, conversion) are performed by <strong class="font-semibold">OpenSSL running directly in your browser tab</strong>.</span></li>
-                    <li class="flex items-start gap-2"><span class="text-emerald-500 font-bold mt-0.5 shrink-0">&#10003;</span><span>The Memory Vault exists only in your browser&rsquo;s RAM for the current session &mdash; <strong class="font-semibold">nothing is written to disk or localStorage</strong>.</span></li>
-                    <li class="flex items-start gap-2"><span class="text-emerald-500 font-bold mt-0.5 shrink-0">&#10003;</span><span>You can <strong class="font-semibold">download the page and run it completely offline</strong> &mdash; once the assets are loaded, no network connection is needed.</span></li>
+                <ul class="space-y-2.5 text-sm text-emerald-900 dark:text-emerald-100/90">
+                    <li class="flex items-start gap-2.5"><svg class="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg><span>Your certificate files, private keys, and passwords <strong class="font-semibold">never leave your device</strong> — there is no backend server receiving them.</span></li>
+                    <li class="flex items-start gap-2.5"><svg class="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg><span>All cryptographic operations (decryption, parsing, conversion) are performed by <strong class="font-semibold">OpenSSL running directly in your browser tab</strong>.</span></li>
+                    <li class="flex items-start gap-2.5"><svg class="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg><span>The Memory Vault exists only in your browser&rsquo;s RAM for the current session — <strong class="font-semibold">nothing is written to disk or storage</strong>. Only your light/dark theme choice is remembered.</span></li>
+                    <li class="flex items-start gap-2.5"><svg class="h-4 w-4 mt-0.5 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg><span>You can <strong class="font-semibold">download the page and run it completely offline</strong> — once the assets are loaded, no network connection is needed.</span></li>
                 </ul>
             </div>
 
-            <div class="space-y-5">
-
-                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-slate-800 mb-1">What is WebAssembly?</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed mb-3">WebAssembly (WASM) is a low-level binary instruction format that runs inside the browser at near-native speed. Every modern browser (Chrome, Firefox, Safari, Edge) includes a sandboxed WASM runtime as part of the JavaScript engine. Code compiled to WASM has <strong>no direct access to the operating system, the file system, or the network</strong> &mdash; it can only interact with what the JavaScript host explicitly provides to it.</p>
-                    <p class="text-sm text-slate-600 leading-relaxed">This means a WASM module cannot exfiltrate data even if it wanted to: the sandbox physically prevents it from opening sockets or reading files outside the controlled API surface.</p>
+            <div class="space-y-4">
+                <div class="card p-6">
+                    <h3 class="font-bold text-slate-900 dark:text-white mb-1.5 text-[15px]">What is WebAssembly?</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-3">WebAssembly (WASM) is a low-level binary instruction format that runs inside the browser at near-native speed. Every modern browser (Chrome, Firefox, Safari, Edge) includes a sandboxed WASM runtime as part of the JavaScript engine. Code compiled to WASM has <strong>no direct access to the operating system, the file system, or the network</strong> — it can only interact with what the JavaScript host explicitly provides to it.</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">This means a WASM module cannot exfiltrate data even if it wanted to: the sandbox physically prevents it from opening sockets or reading files outside the controlled API surface.</p>
                 </div>
 
-                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-slate-800 mb-1">OpenSSL compiled to WASM</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed mb-3">OpenSSL is the industry-standard C library used by servers worldwide for TLS, certificate management, and cryptographic operations. Using Emscripten (a C/C++ to WebAssembly compiler toolchain), the OpenSSL source is compiled into a <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl.wasm</code> binary and a thin JavaScript glue layer (<code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl.js</code>).</p>
-                    <p class="text-sm text-slate-600 leading-relaxed">The result is the <em>exact same</em> OpenSSL you would invoke from a terminal &mdash; <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl x509</code>, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl pkcs12</code>, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl pkey</code> &mdash; executing inside a browser tab instead of a shell.</p>
+                <div class="card p-6">
+                    <h3 class="font-bold text-slate-900 dark:text-white mb-1.5 text-[15px]">OpenSSL compiled to WASM</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed mb-3">OpenSSL is the industry-standard C library used by servers worldwide for TLS, certificate management, and cryptographic operations. Using Emscripten (a C/C++ to WebAssembly compiler toolchain), the OpenSSL source is compiled into a <code class="code">openssl.wasm</code> binary and a thin JavaScript glue layer (<code class="code">openssl.js</code>).</p>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">The result is the <em>exact same</em> OpenSSL you would invoke from a terminal — <code class="code">openssl x509</code>, <code class="code">openssl pkcs12</code>, <code class="code">openssl pkey</code> — executing inside a browser tab instead of a shell.</p>
                 </div>
 
-                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-slate-800 mb-1">How a tool operation works end-to-end</h3>
-                    <ol class="text-sm text-slate-600 leading-relaxed space-y-2 list-none">
-                        <li class="flex gap-3"><span class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded h-max mt-0.5 shrink-0">1</span><span>Your file or pasted PEM data is read by JavaScript using the browser&rsquo;s <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">FileReader</code> API &mdash; it stays in the tab&rsquo;s memory.</span></li>
-                        <li class="flex gap-3"><span class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded h-max mt-0.5 shrink-0">2</span><span>A WASM instance of <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">openssl.wasm</code> is initialised. Each operation typically gets its own isolated instance to avoid state bleed.</span></li>
-                        <li class="flex gap-3"><span class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded h-max mt-0.5 shrink-0">3</span><span>The file bytes are written into the WASM module&rsquo;s linear memory (a private, sandboxed block of bytes &mdash; like RAM for the module). The OpenSSL command is then executed inside that memory space.</span></li>
-                        <li class="flex gap-3"><span class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded h-max mt-0.5 shrink-0">4</span><span>OpenSSL writes its output (the parsed certificate fields, the converted file bytes, the extracted key) back to the same linear memory.</span></li>
-                        <li class="flex gap-3"><span class="font-mono text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded h-max mt-0.5 shrink-0">5</span><span>JavaScript reads the result out and renders it in the UI or offers it as a download via a temporary <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">Blob URL</code>. The WASM instance is then discarded.</span></li>
+                <div class="card p-6">
+                    <h3 class="font-bold text-slate-900 dark:text-white mb-3 text-[15px]">How a tool operation works end-to-end</h3>
+                    <ol class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed space-y-2.5 list-none">
+                        <li class="flex gap-3"><span class="font-mono tnum text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-md h-max mt-0.5 shrink-0">1</span><span>Your file or pasted PEM data is read by JavaScript using the browser&rsquo;s <code class="code">FileReader</code> API — it stays in the tab&rsquo;s memory.</span></li>
+                        <li class="flex gap-3"><span class="font-mono tnum text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-md h-max mt-0.5 shrink-0">2</span><span>A WASM instance of <code class="code">openssl.wasm</code> is initialised. Each operation typically gets its own isolated instance to avoid state bleed.</span></li>
+                        <li class="flex gap-3"><span class="font-mono tnum text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-md h-max mt-0.5 shrink-0">3</span><span>The file bytes are written into the WASM module&rsquo;s linear memory (a private, sandboxed block of bytes — like RAM for the module). The OpenSSL command is then executed inside that memory space.</span></li>
+                        <li class="flex gap-3"><span class="font-mono tnum text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-md h-max mt-0.5 shrink-0">4</span><span>OpenSSL writes its output (the parsed certificate fields, the converted file bytes, the extracted key) back to the same linear memory.</span></li>
+                        <li class="flex gap-3"><span class="font-mono tnum text-[11px] bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-bold px-2 py-0.5 rounded-md h-max mt-0.5 shrink-0">5</span><span>JavaScript reads the result out and renders it in the UI or offers it as a download via a temporary <code class="code">Blob URL</code>. The WASM instance is then discarded.</span></li>
                     </ol>
-                    <p class="text-sm text-slate-500 leading-relaxed mt-3">At no point in this flow is there a <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">fetch()</code> or <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">XMLHttpRequest</code> carrying your data. You can verify this yourself by opening DevTools &#8594; Network and filtering by XHR/Fetch while using any tool.</p>
+                    <p class="text-sm text-slate-500 dark:text-slate-500 leading-relaxed mt-3">At no point in this flow is there a <code class="code">fetch()</code> or <code class="code">XMLHttpRequest</code> carrying your data. You can verify this yourself by opening DevTools &#8594; Network and filtering by XHR/Fetch while using any tool.</p>
                 </div>
 
-                <div class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                    <h3 class="font-bold text-slate-800 mb-1">Memory Vault &amp; session scope</h3>
-                    <p class="text-sm text-slate-600 leading-relaxed">The Memory Vault is a plain JavaScript array held in the page&rsquo;s runtime memory. It is never written to <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">localStorage</code>, <code class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">sessionStorage</code>, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents. This is intentional &mdash; private keys should not persist beyond the session you need them.</p>
+                <div class="card p-6">
+                    <h3 class="font-bold text-slate-900 dark:text-white mb-1.5 text-[15px]">Memory Vault &amp; session scope</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">The Memory Vault is a plain JavaScript array held in the page&rsquo;s runtime memory. It is never written to <code class="code">localStorage</code>, <code class="code">sessionStorage</code>, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents. This is intentional — private keys should not persist beyond the session you need them.</p>
                 </div>
-
             </div>
 
-            <p class="mt-8 text-center text-xs text-slate-400">You can audit the full source at any time &mdash; open DevTools and inspect <code class="font-mono bg-slate-100 px-1 rounded">js/</code>.</p>
+            <p class="mt-8 text-center text-xs text-slate-400 dark:text-slate-500">You can audit the full source at any time — open DevTools and inspect <code class="code">js/</code>.</p>
         </div>
 
         <div id="homeTab" class="max-w-4xl mx-auto block">
-            <div class="mb-10 text-center">
-                <div class="flex justify-center mb-5">
-                    <div class="p-4 rounded-2xl bg-blue-600/10 border border-blue-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            <div class="mb-10 text-center pt-4">
+                <div class="flex justify-center mb-6">
+                    <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-600 to-sky-500 shadow-pop">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                     </div>
                 </div>
-                <h2 class="text-4xl font-bold text-slate-800 mb-3">PKI Toolkit</h2>
-                <p class="text-slate-500 text-lg leading-relaxed max-w-2xl mx-auto">Browser-based certificate tools powered by WebAssembly OpenSSL. No servers, no uploads &mdash; everything runs 100% locally in your browser.</p>
+                <p class="eyebrow mb-3">100% local · WebAssembly OpenSSL</p>
+                <h2 class="text-4xl sm:text-[2.75rem] font-bold tracking-tight text-slate-900 dark:text-white mb-3">PKI Toolkit</h2>
+                <div class="h-1 w-16 mx-auto rounded-full bg-gradient-to-r from-indigo-600 to-sky-500 mb-4"></div>
+                <p class="text-slate-600 dark:text-slate-400 text-lg leading-relaxed max-w-2xl mx-auto">Certificate tools that run entirely in your browser. No servers, no uploads — your keys never leave this tab.</p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-
-                <button onclick="switchTab('decoderTab')" class="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-300 p-6 text-left transition-all">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onclick="switchTab('decoderTab')" class="group card p-6 text-left hover:shadow-pop hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all cursor-pointer">
                     <div class="flex items-start gap-4">
-                        <div class="p-3 rounded-xl bg-blue-50 group-hover:bg-blue-100 transition-colors shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        <div class="chip-sky">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-800 mb-1 group-hover:text-blue-600 transition-colors">Cert Decoder</h3>
-                            <p class="text-sm text-slate-500 leading-snug">Decode and inspect PEM certificate chains &mdash; view subject, issuer, SANs, and validity dates.</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Cert Decoder</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Decode chains and CSRs — subject, issuer, SANs, fingerprints, expiry.</p>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 group-hover:text-blue-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
                 </button>
 
-                <button onclick="switchTab('pfxTab')" class="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-amber-300 p-6 text-left transition-all">
+                <button onclick="switchTab('pfxTab')" class="group card p-6 text-left hover:shadow-pop hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all cursor-pointer">
                     <div class="flex items-start gap-4">
-                        <div class="p-3 rounded-xl bg-amber-50 group-hover:bg-amber-100 transition-colors shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                        <div class="chip-indigo">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-800 mb-1 group-hover:text-amber-600 transition-colors">PFX Extractor</h3>
-                            <p class="text-sm text-slate-500 leading-snug">Extract certificates and private keys from password-protected .pfx or .p12 archives.</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">PFX Extractor</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Unpack password-protected .pfx archives into certs and keys.</p>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 group-hover:text-amber-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
                 </button>
 
-                <button onclick="switchTab('matcherTab')" class="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-emerald-300 p-6 text-left transition-all">
+                <button onclick="switchTab('matcherTab')" class="group card p-6 text-left hover:shadow-pop hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all cursor-pointer">
                     <div class="flex items-start gap-4">
-                        <div class="p-3 rounded-xl bg-emerald-50 group-hover:bg-emerald-100 transition-colors shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        <div class="chip-emerald">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-800 mb-1 group-hover:text-emerald-600 transition-colors">Key Matcher</h3>
-                            <p class="text-sm text-slate-500 leading-snug">Verify that a private key corresponds to a certificate or CSR by comparing public keys.</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Key Matcher &amp; Unlocker</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Match keys to certs — or unlock an encrypted PEM key.</p>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 group-hover:text-emerald-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
                 </button>
 
-                <button onclick="switchTab('converterTab')" class="group bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-purple-300 p-6 text-left transition-all">
+                <button onclick="switchTab('converterTab')" class="group card p-6 text-left hover:shadow-pop hover:border-indigo-300 dark:hover:border-indigo-500/40 hover:-translate-y-0.5 transition-all cursor-pointer">
                     <div class="flex items-start gap-4">
-                        <div class="p-3 rounded-xl bg-purple-50 group-hover:bg-purple-100 transition-colors shrink-0">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                        <div class="chip-violet">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
                         </div>
                         <div class="flex-1 min-w-0">
-                            <h3 class="font-bold text-slate-800 mb-1 group-hover:text-purple-600 transition-colors">Cert Converter</h3>
-                            <p class="text-sm text-slate-500 leading-snug">Convert between PEM, DER, P7B, and PFX certificate formats directly in your browser.</p>
+                            <h3 class="font-bold text-slate-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors text-[15px]">Cert Converter</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400 leading-snug">Convert between PEM, DER, P7B, and PFX formats.</p>
                         </div>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 group-hover:text-purple-400 transition-colors shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-300 dark:text-slate-600 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
                     </div>
                 </button>
-
             </div>
 
-            <button onclick="switchTab('localTab')" class="mt-10 mx-auto block text-xs text-slate-400 hover:text-emerald-500 transition-colors underline underline-offset-2 decoration-dotted">Powered by WebAssembly OpenSSL &mdash; no data ever leaves your machine. Learn how &rarr;</button>
+            <button onclick="switchTab('localTab')" class="mt-10 mx-auto block tool-link">Powered by WebAssembly OpenSSL — no data ever leaves your machine. Learn how &rarr;</button>
         </div>
 
         <div id="pfxTab" class="max-w-2xl mx-auto hidden">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-slate-800 mb-2">Secure PFX Extractor</h2>
-                <p class="text-slate-500 leading-relaxed">Extract certificates and private keys from PKCS#12 archives. All decryption happens safely offline in your browser's memory.</p>
+                <p class="eyebrow mb-2">PKCS#12 archives</p>
+                <h2 class="tab-title">PFX Extractor</h2>
+                <p class="lede">Extract certificates and private keys from .pfx or .p12 archives. All decryption happens offline in your browser&rsquo;s memory.</p>
             </div>
-            
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-5">
+
+            <div class="card p-6 sm:p-8 space-y-5">
                 <div>
-                    <label for="pfxFile" class="block text-sm font-semibold text-slate-700 mb-1.5">Select PFX / P12 File</label>
-                    <input type="file" id="pfxFile" accept=".pfx,.p12" 
-                        class="w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-slate-200 rounded-lg cursor-pointer transition-all bg-slate-50">
+                    <label for="pfxFile" class="field-label">Select PFX / P12 file</label>
+                    <input type="file" id="pfxFile" accept=".pfx,.p12" class="file">
                 </div>
 
                 <div id="passwordGroup" class="hidden opacity-0 transition-opacity duration-300">
-                    <label for="pfxPass" class="block text-sm font-semibold text-slate-700 mb-1.5">Archive Password</label>
-                    <input type="password" id="pfxPass" placeholder="Enter password to decrypt" 
-                        class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm">
+                    <label for="pfxPass" class="field-label">Archive password</label>
+                    <input type="password" id="pfxPass" placeholder="Enter password to decrypt" class="input" autocomplete="off">
                 </div>
-                
-                <button id="unlockBtn" class="hidden w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50 mt-2 flex justify-center items-center gap-2">
-                    Unlock Vault
+
+                <button id="unlockBtn" class="btn-primary hidden mt-2">
+                    Unlock archive
                 </button>
-                
-                <div id="status" class="text-center font-medium mt-4 text-sm text-slate-600 hidden"></div>
+
+                <div id="status" class="status-busy hidden"></div>
             </div>
 
             <div id="certViewer" class="hidden mt-8">
-                <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                    Extracted Details 
-                    <span class="text-xs font-normal bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full">Auto-saved to Vault</span>
+                <h3 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white mb-4 flex items-center gap-2 flex-wrap">
+                    Extracted details
+                    <span class="badge-saved">Auto-saved to Vault</span>
                 </h3>
-                <div class="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4 shadow-sm text-sm">
-                    <dl class="divide-y divide-slate-100">
-                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6"><dt class="font-medium text-slate-500">Common Name</dt><dd class="mt-1 text-slate-900 sm:mt-0 sm:col-span-2 font-semibold break-all" id="pfxCN">-</dd></div>
-                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-slate-50"><dt class="font-medium text-slate-500">Organization</dt><dd class="mt-1 text-slate-900 sm:mt-0 sm:col-span-2 break-all" id="pfxOrg">-</dd></div>
-                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6"><dt class="font-medium text-slate-500">Issuer</dt><dd class="mt-1 text-slate-900 sm:mt-0 sm:col-span-2 break-all" id="pfxIssuer">-</dd></div>
-                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6 bg-slate-50"><dt class="font-medium text-slate-500">Valid From</dt><dd class="mt-1 text-slate-900 sm:mt-0 sm:col-span-2" id="pfxValidFrom">-</dd></div>
-                        <div class="px-4 py-3 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6"><dt class="font-medium text-slate-500">Valid To</dt><dd class="mt-1 text-slate-900 sm:mt-0 sm:col-span-2" id="pfxValidTo">-</dd></div>
+                <div class="kv">
+                    <dl class="divide-y divide-slate-100 dark:divide-white/5">
+                        <div class="kv-row"><dt class="kv-dt">Common Name</dt><dd class="kv-dd font-semibold" id="pfxCN">-</dd></div>
+                        <div class="kv-row"><dt class="kv-dt">Organization</dt><dd class="kv-dd" id="pfxOrg">-</dd></div>
+                        <div class="kv-row"><dt class="kv-dt">Issuer</dt><dd class="kv-dd" id="pfxIssuer">-</dd></div>
+                        <div class="kv-row"><dt class="kv-dt">Valid From</dt><dd class="kv-dd tnum" id="pfxValidFrom">-</dd></div>
+                        <div class="kv-row"><dt class="kv-dt">Valid To</dt><dd class="kv-dd tnum" id="pfxValidTo">-</dd></div>
                     </dl>
                 </div>
+                <div id="pfxChain" class="hidden mb-4 space-y-2"></div>
                 <details class="group mb-6">
-                    <summary class="flex items-center gap-2 cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800 select-none w-max">
+                    <summary class="flex items-center gap-2 cursor-pointer text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 select-none w-max">
                         <svg class="w-4 h-4 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
-                        View Raw OpenSSL Output
+                        View raw OpenSSL output
                     </summary>
-                    <div class="mt-3"><pre id="pfxDetailsText" class="bg-slate-800 text-emerald-400 rounded-lg p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words"></pre></div>
+                    <div class="mt-3"><pre id="pfxDetailsText" class="raw-pre tnum"></pre></div>
                 </details>
-                <button id="downloadBtn" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors flex items-center justify-center gap-2">
+                <button id="downloadBtn" class="btn-success">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
-                    Download Extracted PEM Files
+                    Download extracted PEM files
                 </button>
             </div>
         </div>
 
         <div id="decoderTab" class="max-w-4xl mx-auto hidden">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-slate-800 mb-2">Certificate Decoder</h2>
-                <p class="text-slate-500 leading-relaxed">Paste a PEM encoded SSL certificate below, or load one from your Memory Vault.</p>
+                <p class="eyebrow mb-2">Inspect &amp; verify</p>
+                <h2 class="tab-title">Certificate Decoder</h2>
+                <p class="lede">Paste PEM certificates or CSRs below, or load one from your Memory Vault. Chains are ordered leaf&nbsp;&rarr;&nbsp;root automatically.</p>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                <div class="bg-blue-600 px-4 py-3 flex items-center justify-between">
-                    <h3 class="text-white font-medium text-sm">Paste Certificate Chain (PEM)</h3>
-                    
-                    <select id="decoderVaultSelect" class="text-xs rounded border-0 py-1.5 px-3 text-slate-800 bg-white/90 hover:bg-white focus:ring-0 cursor-pointer max-w-[200px] truncate shadow-sm">
-                        <option value="">📥 Load from Vault...</option>
+            <div class="card overflow-hidden flex flex-col">
+                <div class="bg-indigo-600 dark:bg-indigo-950 px-4 py-3 flex items-center justify-between gap-3 border-b border-indigo-700 dark:border-indigo-500/20">
+                    <h3 class="text-white font-medium text-sm">Paste certificate chain or CSR (PEM)</h3>
+                    <select id="decoderVaultSelect" class="text-xs rounded-lg border-0 py-1.5 px-3 text-slate-800 bg-white/95 hover:bg-white focus:ring-2 focus:ring-white/60 cursor-pointer max-w-[200px] truncate shadow-sm outline-none">
+                        <option value="">Load from Vault…</option>
                     </select>
-
                 </div>
-                <textarea id="pemInput" spellcheck="false" class="w-full h-48 p-4 font-mono text-xs text-slate-700 focus:outline-none focus:ring-0 resize-none bg-slate-50" placeholder="-----BEGIN CERTIFICATE-----&#10;MIIG2TCCB...&#10;...&#10;-----END CERTIFICATE-----"></textarea>
+                <textarea id="pemInput" spellcheck="false" class="w-full h-48 p-4 font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-black/30 focus:outline-none focus:ring-0 resize-none placeholder-slate-400 dark:placeholder-slate-600" placeholder="-----BEGIN CERTIFICATE-----&#10;MIIG2TCCB...&#10;...&#10;-----END CERTIFICATE-----"></textarea>
             </div>
 
-            <div id="decodeLoader" class="hidden mt-6 text-sm text-slate-500 flex items-center gap-2">
-                <svg class="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                Decoding Chain...
+            <div id="decodeLoader" class="hidden mt-6 text-sm text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4 text-indigo-600 dark:text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Decoding chain…
             </div>
 
             <div id="decodeResults" class="mt-8 space-y-4"></div>
@@ -279,66 +428,113 @@
 
         <div id="matcherTab" class="max-w-5xl mx-auto hidden">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-slate-800 mb-2">Key & Cert Matcher</h2>
-                <p class="text-slate-500 leading-relaxed">Paste any combination of a Certificate, Private Key, or CSR below. We will extract the public keys from both and verify if they belong to the same cryptographic pair.</p>
+                <p class="eyebrow mb-2">Pairs &amp; private keys</p>
+                <h2 class="tab-title">Key Matcher &amp; Unlocker</h2>
+                <p class="lede">Paste any combination of certificate, private key, or CSR on each side — public keys are extracted and compared. You can also unlock a single encrypted private key below, all offline in WebAssembly OpenSSL.</p>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                    <div class="bg-slate-700 px-4 py-3 flex items-center justify-between">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
+                <div class="card overflow-hidden flex flex-col">
+                    <div class="bg-slate-800 dark:bg-black/40 px-4 py-3 flex items-center justify-between gap-3">
                         <h3 class="text-white font-medium text-sm">Input 1</h3>
-                        <select id="match1VaultSelect" class="text-xs rounded border-0 py-1 px-2 text-slate-800 bg-white/90 hover:bg-white cursor-pointer max-w-[150px] truncate shadow-sm">
-                            <option value="">📥 Load Vault...</option>
+                        <select id="match1VaultSelect" class="text-xs rounded-lg border-0 py-1 px-2 text-slate-800 bg-white/95 hover:bg-white cursor-pointer max-w-[150px] truncate shadow-sm outline-none">
+                            <option value="">Load Vault…</option>
                         </select>
                     </div>
-                    <textarea id="matchInput1" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs text-slate-700 focus:outline-none focus:ring-0 resize-none bg-slate-50" placeholder="Paste Cert, Key, or CSR PEM..."></textarea>
+                    <textarea id="matchInput1" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-black/30 focus:outline-none focus:ring-0 resize-none placeholder-slate-400 dark:placeholder-slate-600" placeholder="Paste cert, key, or CSR PEM…"></textarea>
                 </div>
-                
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-                    <div class="bg-slate-700 px-4 py-3 flex items-center justify-between">
+
+                <div class="card overflow-hidden flex flex-col">
+                    <div class="bg-slate-800 dark:bg-black/40 px-4 py-3 flex items-center justify-between gap-3">
                         <h3 class="text-white font-medium text-sm">Input 2</h3>
-                        <select id="match2VaultSelect" class="text-xs rounded border-0 py-1 px-2 text-slate-800 bg-white/90 hover:bg-white cursor-pointer max-w-[150px] truncate shadow-sm">
-                            <option value="">📥 Load Vault...</option>
+                        <select id="match2VaultSelect" class="text-xs rounded-lg border-0 py-1 px-2 text-slate-800 bg-white/95 hover:bg-white cursor-pointer max-w-[150px] truncate shadow-sm outline-none">
+                            <option value="">Load Vault…</option>
                         </select>
                     </div>
-                    <textarea id="matchInput2" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs text-slate-700 focus:outline-none focus:ring-0 resize-none bg-slate-50" placeholder="Paste Cert, Key, or CSR PEM..."></textarea>
+                    <textarea id="matchInput2" spellcheck="false" class="w-full h-64 p-4 font-mono text-xs leading-relaxed text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-black/30 focus:outline-none focus:ring-0 resize-none placeholder-slate-400 dark:placeholder-slate-600" placeholder="Paste cert, key, or CSR PEM…"></textarea>
                 </div>
             </div>
 
-            <div class="max-w-md mx-auto bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div class="max-w-md mx-auto card p-6">
                 <div class="mb-4">
-                    <label for="matchPass" class="block text-sm font-semibold text-slate-700 mb-1.5">Private Key Password (Optional)</label>
-                    <input type="password" id="matchPass" placeholder="Leave blank if key is unencrypted" 
-                        class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm">
+                    <label for="matchPass" class="field-label">Private key password <span class="font-normal text-slate-400 dark:text-slate-500">(optional)</span></label>
+                    <input type="password" id="matchPass" placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
                 </div>
-                <button id="compareBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50 flex justify-center items-center gap-2">
+                <button id="compareBtn" class="btn-primary">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                    Compare Inputs
+                    Compare inputs
                 </button>
             </div>
 
             <div id="matchResult" class="mt-6 max-w-md mx-auto hidden"></div>
+
+            <div class="max-w-2xl mx-auto mt-10 card p-6 sm:p-8">
+                <h3 class="text-lg font-bold tracking-tight text-slate-900 dark:text-white mb-1">Encrypted key unlocker</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-5">Upload or paste an encrypted PEM key, enter its password above, then unlock to cleartext. The password never leaves your browser — decryption runs inside the WebAssembly sandbox.</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label for="decryptSource" class="field-label">Key source</label>
+                        <select id="decryptSource" class="select">
+                            <option value="input1">Use Input 1</option>
+                            <option value="input2">Use Input 2</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="decryptFormat" class="field-label">Output format</label>
+                        <select id="decryptFormat" class="select">
+                            <option value="auto">Auto (preserve type)</option>
+                            <option value="pkcs8">PKCS#8 (BEGIN PRIVATE KEY)</option>
+                            <option value="traditional">Traditional (BEGIN RSA/EC PRIVATE KEY)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-5">
+                    <label for="decryptFile" class="field-label">Or upload key file <span class="font-normal text-slate-400 dark:text-slate-500">(fills selected input)</span></label>
+                    <input type="file" id="decryptFile" accept=".pem,.key,.txt,.key.pem" class="file">
+                </div>
+
+                <button id="decryptBtn" class="btn-success">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                    Unlock key
+                </button>
+                <div id="decryptStatus" class="status-busy hidden"></div>
+                <div id="decryptInfo" class="hidden mt-3 mx-auto w-max max-w-full text-xs font-mono text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full px-3 py-1 truncate"></div>
+
+                <div class="mt-5">
+                    <label for="decryptOutput" class="field-label">Unlocked key (cleartext PEM)</label>
+                    <textarea id="decryptOutput" spellcheck="false" readonly class="textarea h-48 bg-slate-50 dark:bg-black/30 border-slate-200 dark:border-white/10" placeholder="Decrypted key will appear here…"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                    <button id="decryptCopy" class="btn-ghost">Copy</button>
+                    <button id="decryptDownload" class="btn-primary !w-auto">Download .pem</button>
+                    <button id="decryptSaveVault" class="btn-ghost">Save to Vault</button>
+                </div>
+            </div>
         </div>
 
         <div id="converterTab" class="max-w-2xl mx-auto hidden">
             <div class="mb-8">
-                <h2 class="text-3xl font-bold text-slate-800 mb-2">Certificate Converter</h2>
-                <p class="text-slate-500 leading-relaxed">Convert SSL certificates to and from different formats (PEM, DER, P7B, PFX) natively in your browser.</p>
+                <p class="eyebrow mb-2">Format shifting</p>
+                <h2 class="tab-title">Certificate Converter</h2>
+                <p class="lede">Convert certificates between PEM, DER, P7B, and PFX — including P7B unpacking — natively in your browser.</p>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 space-y-5">
-                
+            <div class="card p-6 sm:p-8 space-y-5">
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Current Format</label>
-                        <select id="convFromType" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
+                        <label for="convFromType" class="field-label">Current format</label>
+                        <select id="convFromType" class="select">
                             <option value="pem">Standard PEM</option>
                             <option value="der">DER / Binary</option>
+                            <option value="p7b">P7B / PKCS#7</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">Target Format</label>
-                        <select id="convToType" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm bg-white">
+                        <label for="convToType" class="field-label">Target format</label>
+                        <select id="convToType" class="select">
                             <option value="der">DER / Binary</option>
                             <option value="pem">Standard PEM</option>
                             <option value="p7b">P7B / PKCS#7</option>
@@ -348,44 +544,47 @@
                 </div>
 
                 <div>
-                    <label class="block text-sm font-semibold text-slate-700 mb-1.5">Certificate Source</label>
+                    <label class="field-label" id="convCertLabel">Certificate source</label>
                     <div class="flex items-center gap-3">
-                        <select id="convCertVaultSelect" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                            <option value="">-- Load from Vault --</option>
+                        <select id="convCertVaultSelect" aria-labelledby="convCertLabel" class="select flex-1">
+                            <option value="">— Load from Vault —</option>
                         </select>
-                        <span class="text-xs font-bold text-slate-400">OR</span>
-                        <input type="file" id="convFile" class="flex-1 text-sm text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 border border-slate-200 rounded-lg cursor-pointer transition-all bg-slate-50">
+                        <span class="text-[11px] font-bold text-slate-400 dark:text-slate-500">OR</span>
+                        <input type="file" id="convFile" class="file flex-1">
                     </div>
                 </div>
 
-                <div id="convKeyGroup" class="hidden pt-4 border-t border-slate-100">
-                    <label class="block text-sm font-semibold text-slate-700 mb-1.5 text-blue-600">Private Key Source (Required for PFX)</label>
+                <div id="convKeyGroup" class="hidden pt-5 border-t border-slate-200 dark:border-white/10">
+                    <p class="field-label !text-indigo-600 dark:!text-indigo-400">Private key source <span class="font-normal">(required for PFX)</span></p>
                     <div class="flex items-center gap-3">
-                        <select id="convKeyVaultSelect" class="flex-1 px-4 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                            <option value="">-- Load from Vault --</option>
+                        <select id="convKeyVaultSelect" aria-label="Load private key from Vault" class="select flex-1">
+                            <option value="">— Load from Vault —</option>
                         </select>
-                        <span class="text-xs font-bold text-slate-400">OR</span>
-                        <input type="file" id="convKeyFile" class="flex-1 text-sm text-slate-500 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200 border border-slate-200 rounded-lg cursor-pointer transition-all bg-slate-50">
+                        <span class="text-[11px] font-bold text-slate-400 dark:text-slate-500">OR</span>
+                        <input type="file" id="convKeyFile" class="file flex-1">
                     </div>
-                    
+
                     <div class="mt-4">
-                        <label class="block text-sm font-semibold text-slate-700 mb-1.5">New PFX Password</label>
-                        <input type="password" id="convPass" placeholder="Set a password for the new PFX" class="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <label for="convKeyPass" class="field-label">Private key password <span class="font-normal text-slate-400 dark:text-slate-500">(if key is encrypted)</span></label>
+                        <input type="password" id="convKeyPass" placeholder="Leave blank if key is unencrypted" class="input" autocomplete="off">
+                    </div>
+
+                    <div class="mt-4">
+                        <label for="convPass" class="field-label">New PFX password</label>
+                        <input type="password" id="convPass" placeholder="Set a password for the new PFX" class="input" autocomplete="off">
                     </div>
                 </div>
 
-                <button id="convertBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg shadow-sm transition-colors disabled:opacity-50 mt-4 flex justify-center items-center gap-2">
+                <button id="convertBtn" class="btn-primary mt-4">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
-                    Convert Certificate
+                    Convert certificate
                 </button>
-                <div id="convStatus" class="text-center font-medium mt-4 text-sm hidden"></div>
+                <div id="convStatus" class="status-busy hidden"></div>
             </div>
         </div>
 
-    </div>
+    </main>
 
     <script type="module" src="js/main.js"></script>
-    
-    <style> details > summary { list-style: none; } details > summary::-webkit-details-marker { display: none; } </style>
 </body>
 </html>
