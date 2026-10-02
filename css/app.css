@@ -1,0 +1,213 @@
+/* Tailwind source stylesheet.
+ * Compiled to assets/app.css via `npm run build:css` (tailwind.config.js).
+ * NOTE 1: @font-face URLs are relative to the COMPILED file (assets/app.css),
+ *         hence 'fonts/...' rather than '../assets/fonts/...'.
+ * NOTE 2: Tailwind v3 @apply limitations worked around here:
+ *           - `dark:` variants inside @apply are not emitted  -> explicit
+ *             `.dark .component { ... }` companion rules instead.
+ *           - chaining custom classes (`@apply btn ...`) is unreliable ->
+ *             every component lists its full utility set, no chaining. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+ * Self-hosted Inter (same-origin, no font CDN)
+ * ------------------------------------------------------------------------- */
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('fonts/inter-400.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: url('fonts/inter-500.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: url('fonts/inter-600.woff2') format('woff2');
+}
+@font-face {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('fonts/inter-700.woff2') format('woff2');
+}
+
+:root { color-scheme: light; }
+.dark { color-scheme: dark; }
+
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* ---------------------------------------------------------------------------
+ * Corporate component layer
+ * Geometry: radii 6–8px, hairline borders, flat surfaces, no gradients.
+ * Color: slate canvas; indigo = primary intent only; hue = state only.
+ * ------------------------------------------------------------------------- */
+@layer components {
+    /* ---- Typography ---- */
+    .eyebrow { @apply text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500; }
+    .dark .eyebrow { @apply text-slate-400; }
+
+    .tab-title { @apply text-2xl sm:text-[1.75rem] font-semibold tracking-tight text-slate-900; }
+    .dark .tab-title { @apply text-white; }
+
+    .lede { @apply text-slate-600 leading-relaxed mt-2 max-w-2xl; }
+    .dark .lede { @apply text-slate-400; }
+
+    /* ---- Surfaces ---- */
+    .card { @apply bg-white border border-slate-200 rounded-lg shadow-card; }
+    .dark .card { @apply bg-slate-900 border-white/10; }
+
+    .panel { @apply bg-white border border-slate-200 rounded-md overflow-hidden; }
+    .dark .panel { @apply bg-slate-900 border-white/10; }
+
+    /* ---- Buttons: 6px radius, no hover glow, no gradients ---- */
+    .btn {
+        @apply inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2;
+    }
+    .dark .btn:focus-visible { --tw-ring-offset-color: #020617; }
+
+    .btn-primary { @apply inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white py-2.5 px-4 text-sm; }
+
+    .btn-success { @apply inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white py-2.5 px-4 text-sm; }
+
+    .btn-ghost { @apply inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 py-2 px-3.5 text-sm; }
+    .dark .btn-ghost { @apply bg-transparent hover:bg-white/5 text-slate-200 border-white/15; }
+
+    .btn-danger-soft { @apply inline-flex items-center justify-center gap-2 font-medium rounded-md transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 py-2 px-3.5 text-sm; }
+    .dark .btn-danger-soft { @apply bg-red-500/10 hover:bg-red-500/20 text-red-300 border-red-500/20; }
+
+    .btn-block { @apply w-full py-2.5 px-4; }
+
+    .btn-mini { @apply inline-flex items-center font-medium text-xs px-2 py-1 rounded-md bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+    .dark .btn-mini { @apply bg-white/5 text-slate-200 border-white/15 hover:bg-white/10; }
+    .btn-mini-danger { @apply inline-flex items-center font-medium text-xs px-2 py-1 rounded-md bg-white text-red-600 border border-red-200 hover:bg-red-50 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+    .dark .btn-mini-danger { @apply bg-transparent hover:bg-red-500/10 text-red-400 border-red-500/30; }
+
+    /* ---- Forms ---- */
+    .field-label { @apply block text-[13px] font-medium text-slate-700 mb-1.5; }
+    .dark .field-label { @apply text-slate-300; }
+
+    .input { @apply w-full px-3 py-2 rounded-md text-sm bg-white text-slate-900 placeholder-slate-400 border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors; }
+    .dark .input { @apply bg-white/5 text-slate-100 placeholder-slate-500 border-white/15; }
+
+    .select { @apply w-full px-3 py-2 rounded-md text-sm bg-white text-slate-900 placeholder-slate-400 border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors pr-8 cursor-pointer; }
+    .dark .select { @apply bg-white/5 text-slate-100 placeholder-slate-500 border-white/15; }
+
+    .textarea { @apply w-full px-3 py-2 rounded-md text-sm bg-white text-slate-900 placeholder-slate-400 border border-slate-300 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-colors font-mono text-xs leading-relaxed resize-none; }
+    .dark .textarea { @apply bg-white/5 text-slate-100 placeholder-slate-500 border-white/15; }
+
+    .file { @apply w-full text-sm text-slate-500 border border-slate-200 rounded-md cursor-pointer bg-slate-50 transition-colors file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-indigo-50 file:text-indigo-700; }
+    .file:hover::file-selector-button { @apply bg-indigo-100; }
+    .dark .file { @apply text-slate-400 border-white/10 bg-white/5; }
+    .dark .file::file-selector-button { @apply bg-indigo-500/15 text-indigo-300; }
+    .dark .file:hover::file-selector-button { @apply bg-indigo-500/25; }
+
+    /* ---- Badges: 4px radius tags, hue = meaning ---- */
+    .badge { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap; }
+    .badge-cert { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-sky-50 text-sky-700 border-sky-200; }
+    .dark .badge-cert { @apply bg-sky-500/10 text-sky-300 border-sky-500/25; }
+    .badge-key { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200; }
+    .dark .badge-key { @apply bg-amber-500/10 text-amber-300 border-amber-500/25; }
+    .badge-csr { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-teal-50 text-teal-700 border-teal-200; }
+    .dark .badge-csr { @apply bg-teal-500/10 text-teal-300 border-teal-500/25; }
+    .badge-leaf { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-slate-900 text-white border-transparent; }
+    .dark .badge-leaf { @apply bg-white/90 text-slate-900; }
+    .badge-chain { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-slate-100 text-slate-600 border-slate-200; }
+    .dark .badge-chain { @apply bg-white/10 text-slate-300 border-white/10; }
+    .badge-expired { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-red-50 text-red-700 border-red-200; }
+    .dark .badge-expired { @apply bg-red-500/10 text-red-300 border-red-500/25; }
+    .badge-expiring { @apply inline-flex items-center text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded border whitespace-nowrap bg-amber-50 text-amber-700 border-amber-200; }
+    .dark .badge-expiring { @apply bg-amber-500/10 text-amber-300 border-amber-500/25; }
+    .badge-saved { @apply inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded border whitespace-nowrap bg-emerald-50 text-emerald-700 border-emerald-200; }
+    .dark .badge-saved { @apply bg-emerald-500/10 text-emerald-300 border-emerald-500/25; }
+
+    /* ---- Async outcome statuses (paired with aria-live regions) ---- */
+    .status { @apply text-center font-medium mt-4 text-sm flex items-center justify-center gap-2; }
+    .status::before { content: ''; width: 0.5rem; height: 0.5rem; border-radius: 9999px; flex-shrink: 0; }
+    .status-ok { @apply status text-emerald-600; }
+    .status-ok::before { @apply bg-emerald-500; }
+    .dark .status-ok { @apply text-emerald-400; }
+    .status-warn { @apply status text-amber-600; }
+    .status-warn::before { @apply bg-amber-500; }
+    .dark .status-warn { @apply text-amber-400; }
+    .status-error { @apply status text-red-600; }
+    .status-error::before { @apply bg-red-500; }
+    .dark .status-error { @apply text-red-400; }
+    .status-busy { @apply status text-slate-500; }
+    .status-busy::before { @apply bg-indigo-500; }
+    .dark .status-busy { @apply text-slate-400; }
+
+    .result { @apply mt-6 max-w-md mx-auto p-4 rounded-lg flex items-start gap-3 shadow-card border text-sm; }
+    .result-ok { @apply mt-6 max-w-md mx-auto p-4 rounded-lg flex items-start gap-3 shadow-card border text-sm bg-emerald-50 border-emerald-200 text-emerald-800; }
+    .dark .result-ok { @apply bg-emerald-500/10 border-emerald-500/25 text-emerald-200; }
+    .result-error { @apply mt-6 max-w-md mx-auto p-4 rounded-lg flex items-start gap-3 shadow-card border text-sm bg-amber-50 border-amber-200 text-amber-800; }
+    .dark .result-error { @apply bg-amber-500/10 border-amber-500/25 text-amber-200; }
+    .result-mismatch { @apply mt-6 max-w-md mx-auto p-4 rounded-lg flex items-start gap-3 shadow-card border text-sm bg-rose-50 border-rose-200 text-rose-800; }
+    .dark .result-mismatch { @apply bg-rose-500/10 border-rose-500/25 text-rose-200; }
+
+    /* ---- Navigation: left-border active indicator (Carbon/Azure pattern) ---- */
+    .nav-item { @apply w-full flex items-center gap-3 px-3 py-2 rounded-md border-l-2 border-transparent text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+    .nav-item svg { @apply h-5 w-5 shrink-0 text-slate-400; }
+    .dark .nav-item { @apply text-slate-400 hover:bg-white/5 hover:text-white; }
+    .dark .nav-item svg { @apply text-slate-500; }
+    .nav-active { @apply bg-indigo-50 text-indigo-700 border-indigo-600; }
+    .dark .nav-active { @apply bg-indigo-500/10 text-indigo-300; }
+    .nav-active svg { @apply text-indigo-600; }
+    .dark .nav-active svg { @apply text-indigo-400; }
+
+    /* ---- Icon treatment: single neutral chip; color lives in state ---- */
+    .icon-chip { @apply p-2.5 rounded-md bg-slate-100 text-slate-600 shrink-0; }
+    .dark .icon-chip { @apply bg-white/5 text-slate-300; }
+
+    .code { @apply font-mono text-xs bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded; }
+    .dark .code { @apply bg-white/10 text-slate-200; }
+
+    .raw-pre { @apply bg-slate-900 text-emerald-400 rounded-md p-4 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-words border border-slate-800; }
+    .dark .raw-pre { @apply bg-black/60 border-white/10; }
+
+    /* ---- Ledger-style key/value rows ---- */
+    .kv { @apply bg-white border border-slate-200 rounded-lg overflow-hidden text-sm; }
+    .dark .kv { @apply bg-slate-900 border-white/10; }
+    .kv-row { @apply px-4 py-2 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-5; }
+    .kv-dt { @apply text-[13px] text-slate-500; }
+    .dark .kv-dt { @apply text-slate-400; }
+    .kv-dd { @apply mt-0.5 text-slate-900 sm:mt-0 sm:col-span-2 break-all text-sm; }
+    .dark .kv-dd { @apply text-slate-100; }
+
+    /* ---- Memory vault rows ---- */
+    .vault-row { @apply bg-white border border-slate-200 rounded-md px-3 py-2 text-xs; }
+    .dark .vault-row { @apply bg-white/5 border-white/10; }
+    .vault-empty { @apply text-slate-500 italic text-xs px-2; }
+    .dark .vault-empty { @apply text-slate-400; }
+    .vault-label { @apply truncate pr-2 font-medium text-left flex-1 min-w-0 text-slate-700 hover:text-indigo-600 cursor-pointer transition-colors; }
+    .dark .vault-label { @apply text-slate-200 hover:text-indigo-300; }
+    .vault-mini { @apply flex-1 text-[11px] font-medium px-2 py-1 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500; }
+    .vault-dl { @apply flex-1 text-[11px] font-medium px-2 py-1 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 bg-slate-100 hover:bg-slate-200 text-slate-600; }
+    .dark .vault-dl { @apply bg-white/10 hover:bg-white/15 text-slate-300; }
+    .vault-rm { @apply flex-1 text-[11px] font-medium px-2 py-1 rounded transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 bg-red-50 hover:bg-red-100 text-red-600; }
+    .dark .vault-rm { @apply bg-red-500/10 hover:bg-red-500/20 text-red-300; }
+
+    .mini-card { @apply bg-white border border-slate-200 rounded-md px-3 py-2 text-sm; }
+    .dark .mini-card { @apply bg-slate-900 border-white/10; }
+
+    .tool-link { @apply text-xs text-slate-500 hover:text-indigo-600 transition-colors underline underline-offset-2 decoration-dotted; }
+    .dark .tool-link { @apply text-slate-400 hover:text-indigo-400; }
+}

@@ -62,18 +62,18 @@ function renderCsrNode(csr) {
                 <div class="w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-[3px] border-slate-300 dark:border-slate-600 ring-4 ring-slate-100 dark:ring-white/5"></div>
             </div>
 
-            <details class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-card overflow-hidden flex-1 z-10" open>
+            <details class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg shadow-card overflow-hidden flex-1 z-10" open>
                 <summary class="px-5 py-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 flex items-center justify-between transition-colors list-none">
                     <div class="flex items-center gap-4">
-                        <svg class="w-8 h-8 text-teal-500 dark:text-teal-400 bg-teal-50 dark:bg-teal-500/10 p-1.5 rounded-xl border border-teal-100 dark:border-teal-500/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-8 h-8 text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-white/5 p-1.5 rounded-md border border-slate-200 dark:border-white/10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
-                                <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">Certificate Signing Request</span>
+                                <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Certificate Signing Request</span>
                                 <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'csr', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
                             </div>
-                            <span class="font-bold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
+                            <span class="font-semibold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${csr.pubkeyAlg ? `${pubkeyLabel(csr)} public key` : 'Public key details unavailable'}</span>
                         </div>
                     </div>
@@ -84,7 +84,7 @@ function renderCsrNode(csr) {
 
                 <div class="px-5 py-4 border-t border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-black/20">
                     <div class="kv">
-                        <dl class="divide-y divide-slate-100 dark:divide-white/5">
+                        <dl class="divide-y divide-slate-200 dark:divide-white/10">
                             <div class="kv-row"><dt class="kv-dt">Common Name</dt><dd class="kv-dd font-semibold">${csr.cn || '-'}</dd></div>
                             <div class="kv-row"><dt class="kv-dt">SANs</dt><dd class="kv-dd">${csr.san || '-'}</dd></div>
                             <div class="kv-row"><dt class="kv-dt">Organization</dt><dd class="kv-dd">${csr.org || '-'}</dd></div>
@@ -110,8 +110,7 @@ function renderChainNode(cert, index) {
     const isRoot = cert.subject === cert.issuer;
 
     const label = isLeaf ? 'Leaf Certificate' : (isRoot ? 'Root CA' : 'Intermediate CA');
-    const iconColor = isLeaf ? 'text-sky-500 dark:text-sky-400' : (isRoot ? 'text-amber-500 dark:text-amber-400' : 'text-violet-500 dark:text-violet-400');
-    const iconChip = isLeaf ? 'bg-sky-50 dark:bg-sky-500/10 border-sky-100 dark:border-sky-500/20' : (isRoot ? 'bg-amber-50 dark:bg-amber-500/10 border-amber-100 dark:border-amber-500/20' : 'bg-violet-50 dark:bg-violet-500/10 border-violet-100 dark:border-violet-500/20');
+    const iconChip = 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10';
     const safeName = cert.cn || cert.org || 'Unknown Cert';
     const b64Pem = window.btoa(unescape(encodeURIComponent(cert.raw)));
 
@@ -123,18 +122,18 @@ function renderChainNode(cert, index) {
                 <div class="w-4 h-4 rounded-full bg-white dark:bg-slate-900 border-[3px] border-slate-300 dark:border-slate-600 ring-4 ring-slate-100 dark:ring-white/5"></div>
             </div>
 
-            <details class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-card overflow-hidden flex-1 z-10" ${isLeaf ? 'open' : ''}>
+            <details class="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-lg shadow-card overflow-hidden flex-1 z-10" ${isLeaf ? 'open' : ''}>
                 <summary class="px-5 py-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 flex items-center justify-between transition-colors list-none">
                     <div class="flex items-center gap-4">
-                        <svg class="w-8 h-8 ${iconColor} ${iconChip} p-1.5 rounded-xl border" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg class="w-8 h-8 ${iconChip} p-1.5 rounded-md border" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                         </svg>
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
-                                <span class="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500">${label}</span>
+                                <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">${label}</span>
                                 <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'cert', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
                             </div>
-                            <span class="font-bold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
+                            <span class="font-semibold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Issuer: ${cert.issuerCN || cert.issuer}</span>
                         </div>
                     </div>
@@ -145,7 +144,7 @@ function renderChainNode(cert, index) {
 
                 <div class="px-5 py-4 border-t border-slate-200/70 dark:border-white/10 bg-slate-50/70 dark:bg-black/20">
                     <div class="kv">
-                        <dl class="divide-y divide-slate-100 dark:divide-white/5">
+                        <dl class="divide-y divide-slate-200 dark:divide-white/10">
                             <div class="kv-row"><dt class="kv-dt">Common Name</dt><dd class="kv-dd font-semibold">${cert.cn || '-'}</dd></div>
                             <div class="kv-row"><dt class="kv-dt">SANs</dt><dd class="kv-dd">${cert.san || '-'}</dd></div>
                             <div class="kv-row"><dt class="kv-dt">Organization</dt><dd class="kv-dd">${cert.org || '-'}</dd></div>

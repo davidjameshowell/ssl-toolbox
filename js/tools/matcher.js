@@ -65,8 +65,9 @@ export function initMatcherTool() {
         if (!input1 || !input2) {
             resultBox.className = 'result-error';
             resultBox.innerHTML = `
+                <div class="bg-amber-100 dark:bg-amber-500/15 p-2 rounded-full shrink-0"><svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
                 <div>
-                    <h4 class="font-bold">Missing input</h4>
+                    <h4 class="font-semibold">Missing input</h4>
                     <p class="text-sm opacity-90">Paste a certificate, key, or CSR into both Input 1 and Input 2 — or load them from the Vault.</p>
                 </div>
             `;
@@ -87,7 +88,7 @@ export function initMatcherTool() {
                 resultBox.innerHTML = `
                     <div class="bg-emerald-100 dark:bg-emerald-500/15 p-2 rounded-full shrink-0"><svg class="w-6 h-6 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg></div>
                     <div>
-                        <h4 class="font-bold">Match confirmed</h4>
+                        <h4 class="font-semibold">Match confirmed</h4>
                         <p class="text-sm opacity-90">The public keys for both items are identical. They belong to the same cryptographic pair.</p>
                     </div>
                 `;
@@ -96,7 +97,7 @@ export function initMatcherTool() {
                 resultBox.innerHTML = `
                     <div class="bg-rose-100 dark:bg-rose-500/15 p-2 rounded-full shrink-0"><svg class="w-6 h-6 text-rose-600 dark:text-rose-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg></div>
                     <div>
-                        <h4 class="font-bold">Keys do not match</h4>
+                        <h4 class="font-semibold">Keys do not match</h4>
                         <p class="text-sm opacity-90">The underlying public keys for these two items are different.</p>
                     </div>
                 `;
@@ -107,7 +108,7 @@ export function initMatcherTool() {
             resultBox.innerHTML = `
                 <div class="bg-amber-100 dark:bg-amber-500/15 p-2 rounded-full shrink-0"><svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg></div>
                 <div>
-                    <h4 class="font-bold">Extraction error</h4>
+                    <h4 class="font-semibold">Extraction error</h4>
                     <p class="text-sm opacity-90">${err.message}</p>
                     </div>
             `;

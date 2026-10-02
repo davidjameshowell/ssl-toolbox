@@ -16,3 +16,6 @@ README.md
 tests/
 package.json
 package-lock.json
+node_modules/
+css/
+tailwind.config.js

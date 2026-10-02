@@ -3,9 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "build:css": "tailwindcss -c tailwind.config.js -i css/app.css -o assets/app.css --minify"
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
   }
 }

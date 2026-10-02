@@ -59,9 +59,18 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 ```
 .
 ├── index.html                      # Single-page application entry point
+├── assets/
+│   ├── app.css                     # Compiled Tailwind stylesheet (committed; no runtime CSS)
+│   ├── favicon.svg                 # Application icon
+│   ├── manifest.webmanifest        # PWA metadata (name, theme color)
+│   └── fonts/                      # Self-hosted Inter woff2 (no font CDN)
+├── css/
+│   └── app.css                     # Tailwind source stylesheet + component layer
+├── tailwind.config.js              # Tailwind build config (content globs, dark mode)
 ├── js/
 │   ├── main.js                     # App bootstrap and module initialisation
 │   ├── navigation.js               # Tab switching logic
+│   ├── theme.js                    # Light/dark theme toggle and persistence
 │   ├── state.js                    # Shared app state (vault, openssl config)
 │   ├── vault.js                    # Memory Vault logic and sidebar UI
 │   ├── tools/
@@ -97,7 +106,19 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 ### Prerequisites
 
 - Python 3 (for the local dev server)
+- Node.js 20+ (for tests and CSS builds)
 - A modern browser with WebAssembly support (Chrome, Firefox, Safari, Edge)
+
+### Styles
+
+The stylesheet (`assets/app.css`) is **precompiled and committed** — there is no runtime CSS compilation and no Tailwind CDN. Regenerate it only when markup classes or the component layer change:
+
+```bash
+npm install          # once; installs tailwindcss as a devDependency
+npm run build:css    # css/app.css -> assets/app.css (minified)
+```
+
+Commit the rebuilt `assets/app.css` with your change. CI does not rebuild CSS; deploys serve the committed file.
 
 ### Start the development server
 
@@ -242,9 +263,20 @@ PKI Toolkit is designed around the principle that users should never need to tru
 
 - **No server-side crypto.** All OpenSSL operations run inside a WebAssembly sandbox in your browser tab. The WASM runtime enforces a hard boundary: the module cannot open network sockets, read host files, or access any OS resource outside of what the JavaScript host intentionally exposes.
 - **No persistent storage.** The Memory Vault is a plain JavaScript array in the page's runtime memory. It is never written to `localStorage`, `sessionStorage`, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents. (The only `localStorage` entry is your light/dark theme choice.)
-- **No telemetry.** The application makes no outbound requests with user data. The only outbound requests are for the Tailwind CSS CDN on page load (a standard CDN request with no user data) and Cloudflare's own Wrangler telemetry during deployment (which is unrelated to runtime usage). Fonts are self-hosted same-origin `woff2` files — no font CDN.
+- **No telemetry.** The application makes no outbound requests with user data — all assets (CSS, fonts, WASM, icons) are same-origin. The only non-same-origin activity is Cloudflare's own Wrangler telemetry during deployment, which is unrelated to runtime usage.
 - **Auditable.** The full source is available in this repository. You can inspect the network activity in DevTools → Network while using any tool to verify no data leaves the browser.
-- **Offline-capable.** Once the page and its assets have loaded, the application works with no network connection.
+- **Offline-capable.** Once the page and its assets have loaded, the application works with no network connection. There are no external requests at all — CSS, fonts, and the WASM binary are same-origin.
+
+### Tests
+
+A zero-dependency Node test suite drives the real `openssl.wasm` binary:
+
+```bash
+npm install          # once
+npm test             # node --test tests/*.test.js
+```
+
+The suite runs in CI (advisory) on every push and pull request.
 
 ---
 

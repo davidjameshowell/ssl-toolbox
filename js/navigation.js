@@ -8,10 +8,15 @@ export function switchTab(tabId) {
     const activeClass = 'nav-item nav-active';
 
     ['pfxTab', 'decoderTab', 'matcherTab', 'decryptorTab', 'converterTab'].forEach((id) => {
-        document.getElementById(`nav-${id}`).className = inactiveClass;
+        const el = document.getElementById(`nav-${id}`);
+        el.className = inactiveClass;
+        el.removeAttribute('aria-current');
     });
     const activeNav = document.getElementById(`nav-${tabId}`);
-    if (activeNav) activeNav.className = activeClass;
+    if (activeNav) {
+        activeNav.className = activeClass;
+        activeNav.setAttribute('aria-current', 'page');
+    }
 }
 
 export function initNavigation() {

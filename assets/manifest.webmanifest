@@ -1,0 +1,17 @@
+{
+  "name": "PKI Toolkit",
+  "short_name": "PKI Toolkit",
+  "description": "Browser-based PKI utilities powered by WebAssembly OpenSSL. Zero server-side processing. Zero data egress.",
+  "start_url": ".",
+  "display": "browser",
+  "background_color": "#F7F8FA",
+  "theme_color": "#4F46E5",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

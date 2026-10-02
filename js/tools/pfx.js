@@ -105,7 +105,7 @@ async function processVault(file, password) {
         if (chainBox) {
             if (chain.length > 1) {
                 chainBox.classList.remove('hidden');
-                chainBox.innerHTML = `<h4 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Certificate chain (${chain.length})</h4>` + chain.map((entry, i) => {
+                chainBox.innerHTML = `<h4 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Certificate chain (${chain.length})</h4>` + chain.map((entry, i) => {
                     const m = parseCertMetadata(entry.details, '');
                     const badge = i === 0
                         ? '<span class="ml-2 badge-leaf">Leaf</span>'
