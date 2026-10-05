@@ -1,7 +1,12 @@
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+
+// Test-only passphrases are generated per run rather than committed as literals
+// (a hardcoded `password = "..."` trips generic-password secret scanners).
+export const TEST_PASSWORD = `test-${crypto.randomBytes(12).toString('hex')}`;
 
 function run(args, input = null) {
     return execFileSync('openssl', args, { input, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
@@ -34,7 +39,7 @@ export function genSelfSignedCert({ cn = 'test.example', days = 30 } = {}) {
     };
 }
 
-export function genEncryptedKeys({ password = 'test-password-123' } = {}) {
+export function genEncryptedKeys({ password = TEST_PASSWORD } = {}) {
     const dir = mkTempDir();
     const rsaEnc = path.join(dir, 'rsa-enc.pem');
     const ecEnc = path.join(dir, 'ec-enc.pem');
@@ -64,7 +69,7 @@ export function genCsr({ cn = 'csr.example' } = {}) {
     return { dir, keyPem: fs.readFileSync(key, 'utf8'), csrPem: fs.readFileSync(csr, 'utf8') };
 }
 
-export function makePfx({ certPem, keyPem, password = 'pfx-pass-123', extraCerts = [] }) {
+export function makePfx({ certPem, keyPem, password = TEST_PASSWORD, extraCerts = [] }) {
     const dir = mkTempDir();
     const cert = path.join(dir, 'cert.pem');
     const key = path.join(dir, 'key.pem');
@@ -81,7 +86,7 @@ export function makePfx({ certPem, keyPem, password = 'pfx-pass-123', extraCerts
     return { dir, pfxBytes: new Uint8Array(fs.readFileSync(out)), password };
 }
 
-export function makeCertsOnlyPfx({ certPem, password = 'pfx-pass-123' }) {
+export function makeCertsOnlyPfx({ certPem, password = TEST_PASSWORD }) {
     const dir = mkTempDir();
     const cert = path.join(dir, 'cert.pem');
     const out = path.join(dir, 'bundle.pfx');
