@@ -1,4 +1,5 @@
 import { opensslCnf } from '../state.js';
+import { resolveFactory, runOpenSSL, readOutput } from '../openssl/engine.js';
 
 /**
  * Classify a PEM private key block.
@@ -33,14 +34,6 @@ export function detectKeyType(pem) {
 export function isEncryptedKey(pem) {
     const t = detectKeyType(pem);
     return t === 'pkcs8-encrypted' || t === 'traditional-rsa-encrypted' || t === 'traditional-ec-encrypted' || t === 'traditional-encrypted';
-}
-
-function resolveFactory(explicitFactory) {
-    if (explicitFactory) return explicitFactory;
-    if (typeof window !== 'undefined' && typeof window.createOpenSSL !== 'undefined') {
-        return window.createOpenSSL;
-    }
-    throw new Error('OpenSSL factory unavailable. Pass createOpenSSL explicitly in Node/tests.');
 }
 
 function familyHintFromHeaders(pem) {
@@ -80,24 +73,13 @@ export async function inspectKeyInfo(pemText, options = {}) {
         module.FS.writeFile('/pass.txt', password);
         args.push('-passin', 'file:/pass.txt');
     }
+    let text;
     try {
-        module.callMain(args);
+        runOpenSSL(module, args);
+        text = readOutput(module, '/keytext.txt');
     } catch (err) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
         throw new Error('Could not inspect key — wrong password or corrupted PEM.');
     }
-    if (typeof process !== 'undefined' && process && process.exitCode === 1) {
-        process.exitCode = 0;
-        throw new Error('Could not inspect key — wrong password or corrupted PEM.');
-    }
-    let text = '';
-    try {
-        text = module.FS.readFile('/keytext.txt', { encoding: 'utf8' });
-    } catch (err) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        throw new Error('Could not inspect key — OpenSSL produced no output.');
-    }
-    if (typeof process !== 'undefined' && process) process.exitCode = 0;
 
     let family = 'Unknown';
     if (/ED25519/i.test(text)) family = 'Ed25519';
@@ -186,19 +168,12 @@ export async function decryptPrivateKey(pemText, password, options = {}) {
     }
     if (useTraditional) args.push('-traditional');
 
-    try {
-        module.callMain(args);
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-    } catch (err) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        throw new Error('Decryption failed — wrong password or corrupted PEM key.');
-    }
-
     let out;
     try {
-        out = module.FS.readFile('/out.pem', { encoding: 'utf8' }).trim();
+        runOpenSSL(module, args);
+        out = readOutput(module, '/out.pem').trim();
     } catch (err) {
-        throw new Error('Decryption failed — OpenSSL produced no output. Check the password.');
+        throw new Error('Decryption failed — wrong password or corrupted PEM key.');
     }
     if (!out || !out.includes('PRIVATE KEY')) {
         throw new Error('Decryption failed — OpenSSL produced no output. Check the password.');

@@ -2,17 +2,10 @@ import { appState, opensslCnf } from '../state.js';
 import { parseCertMetadata } from '../utils/cert.js';
 import { downloadFile } from '../utils/download.js';
 import { saveToVault } from '../vault.js';
-
-function resolvePfxFactory(explicitFactory) {
-    if (explicitFactory) return explicitFactory;
-    if (typeof window !== 'undefined' && typeof window.createOpenSSL !== 'undefined') {
-        return window.createOpenSSL;
-    }
-    throw new Error('OpenSSL factory unavailable. Pass createOpenSSL explicitly in Node/tests.');
-}
+import { resolveFactory, runOpenSSL, readOutput, isEngineAvailable } from '../openssl/engine.js';
 
 export async function extractPfxData(pfxBytes, password, explicitFactory = null) {
-    const factory = resolvePfxFactory(explicitFactory);
+    const factory = resolveFactory(explicitFactory);
     const pfxData = pfxBytes instanceof Uint8Array ? pfxBytes : new Uint8Array(pfxBytes);
     const hasPassword = password && password !== '';
     const passArgs = (mod) => {
@@ -23,55 +16,47 @@ export async function extractPfxData(pfxBytes, password, explicitFactory = null)
         return ['-passin', 'pass:'];
     };
 
-    const resetExit = () => {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+    // Certificate bag first (one call), then per-cert details — each detail
+    // pass needs its own short-lived instance (one OpenSSL call per instance).
+    const moduleCert = await factory();
+    moduleCert.FS.writeFile('/mycert.pfx', pfxData);
+    moduleCert.FS.writeFile('/openssl.cnf', opensslCnf);
+    moduleCert.ENV.OPENSSL_CONF = '/openssl.cnf';
+    runOpenSSL(moduleCert, ['pkcs12', '-legacy', '-in', '/mycert.pfx', '-nokeys', '-out', '/cert.pem', ...passArgs(moduleCert)]);
+    const certPem = readOutput(moduleCert, '/cert.pem');
+
+    // A PFX can bundle a full chain — split every certificate block so the
+    // UI can display each one instead of silently showing only the first.
+    const certs = certPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [certPem];
+
+    const readDetails = async (pem) => {
+        const moduleView = await factory();
+        moduleView.FS.writeFile('/cert_detail.pem', pem);
+        runOpenSSL(moduleView, ['x509', '-in', '/cert_detail.pem', '-noout', '-subject', '-issuer', '-dates', '-out', '/details.txt']);
+        return readOutput(moduleView, '/details.txt');
     };
-
-    try {
-        const moduleCert = await factory();
-        moduleCert.FS.writeFile('/mycert.pfx', pfxData);
-        moduleCert.FS.writeFile('/openssl.cnf', opensslCnf);
-        moduleCert.ENV.OPENSSL_CONF = '/openssl.cnf';
-        moduleCert.callMain(['pkcs12', '-legacy', '-in', '/mycert.pfx', '-nokeys', '-out', '/cert.pem', ...passArgs(moduleCert)]);
-        const certPem = moduleCert.FS.readFile('/cert.pem', { encoding: 'utf8' });
-
-        // A PFX can bundle a full chain — split every certificate block so the
-        // UI can display each one instead of silently showing only the first.
-        const certs = certPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [certPem];
-
-        const readDetails = async (pem) => {
-            const moduleView = await factory();
-            moduleView.FS.writeFile('/cert.pem', pem);
-            moduleView.callMain(['x509', '-in', '/cert.pem', '-noout', '-subject', '-issuer', '-dates', '-out', '/details.txt']);
-            return moduleView.FS.readFile('/details.txt', { encoding: 'utf8' });
-        };
-        const details = await readDetails(certs[0]);
-        const chain = [{ pem: certs[0], details }];
-        for (let i = 1; i < certs.length; i += 1) {
-            chain.push({ pem: certs[i], details: await readDetails(certs[i]) });
-        }
-
-        // Certs-only archives (no private key) are valid — don't fail the
-        // whole extraction when the key bag is absent.
-        let keyPem = '';
-        try {
-            const moduleKey = await factory();
-            moduleKey.FS.writeFile('/mycert.pfx', pfxData);
-            moduleKey.FS.writeFile('/openssl.cnf', opensslCnf);
-            moduleKey.ENV.OPENSSL_CONF = '/openssl.cnf';
-            moduleKey.callMain(['pkcs12', '-legacy', '-in', '/mycert.pfx', '-nocerts', '-nodes', '-out', '/key.pem', ...passArgs(moduleKey)]);
-            keyPem = moduleKey.FS.readFile('/key.pem', { encoding: 'utf8' });
-            if (!keyPem.includes('PRIVATE KEY')) keyPem = '';
-        } catch (keyErr) {
-            keyPem = '';
-        }
-
-        resetExit();
-        return { certPem, certs, keyPem, details, chain };
-    } catch (err) {
-        resetExit();
-        throw err;
+    const details = await readDetails(certs[0]);
+    const chain = [{ pem: certs[0], details }];
+    for (let i = 1; i < certs.length; i += 1) {
+        chain.push({ pem: certs[i], details: await readDetails(certs[i]) });
     }
+
+    // Certs-only archives (no private key) are valid — a failed key bag must
+    // not fail the whole extraction, so this lives on its own module.
+    let keyPem = '';
+    try {
+        const moduleKey = await factory();
+        moduleKey.FS.writeFile('/mycert.pfx', pfxData);
+        moduleKey.FS.writeFile('/openssl.cnf', opensslCnf);
+        moduleKey.ENV.OPENSSL_CONF = '/openssl.cnf';
+        runOpenSSL(moduleKey, ['pkcs12', '-legacy', '-in', '/mycert.pfx', '-nocerts', '-nodes', '-out', '/key.pem', ...passArgs(moduleKey)]);
+        keyPem = readOutput(moduleKey, '/key.pem');
+        if (!keyPem.includes('PRIVATE KEY')) keyPem = '';
+    } catch (keyErr) {
+        keyPem = '';
+    }
+
+    return { certPem, certs, keyPem, details, chain };
 }
 
 async function processVault(file, password) {
@@ -161,7 +146,7 @@ export function initPfxTool() {
         if (!file) return;
 
         statusDiv.classList.remove('hidden');
-        if (typeof window.createOpenSSL === 'undefined') {
+        if (!isEngineAvailable()) {
             statusDiv.className = 'status-warn';
             statusDiv.innerText = 'OpenSSL is still loading — pick the file again in a moment.';
             return;
@@ -173,18 +158,18 @@ export function initPfxTool() {
         const buffer = await file.arrayBuffer();
         const pfxData = new Uint8Array(buffer);
 
-        const testModule = await window.createOpenSSL();
+        const testModule = await resolveFactory()();
         testModule.FS.writeFile('/test.pfx', pfxData);
         testModule.FS.writeFile('/openssl.cnf', opensslCnf);
         testModule.ENV.OPENSSL_CONF = '/openssl.cnf';
 
         let isEncrypted = true;
         try {
-            testModule.callMain(['pkcs12', '-legacy', '-in', '/test.pfx', '-nokeys', '-out', '/test_cert.pem', '-passin', 'pass:']);
+            runOpenSSL(testModule, ['pkcs12', '-legacy', '-in', '/test.pfx', '-nokeys', '-out', '/test_cert.pem', '-passin', 'pass:']);
             const stat = testModule.FS.stat('/test_cert.pem');
             if (stat && stat.size > 0) isEncrypted = false;
         } catch (err) {
-            // noop
+            // Wrong/absent password → treat as encrypted.
         }
 
         if (isEncrypted) {

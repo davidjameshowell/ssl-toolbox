@@ -1,6 +1,8 @@
-import { opensslCnf } from '../state.js';
 import { parseCertMetadata, parseCsrMetadata } from '../utils/cert.js';
 import { saveToVault } from '../vault.js';
+import { resolveFactory } from '../openssl/engine.js';
+import { certDecodeJob, csrDecodeJob, runJobLocal } from '../openssl/jobs.js';
+import { runJobs } from '../openssl/pool.js';
 
 let decodeDebounceTimer;
 
@@ -52,9 +54,8 @@ function expiryBadge(cert) {
     return '';
 }
 
-function renderCsrNode(csr) {
+function renderCsrNode(csr, saveIndex) {
     const safeName = csr.cn || csr.org || 'Unknown CSR';
-    const b64Pem = window.btoa(unescape(encodeURIComponent(csr.raw)));
 
     return `
         <div class="relative z-10 flex">
@@ -71,7 +72,7 @@ function renderCsrNode(csr) {
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
                                 <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Certificate Signing Request</span>
-                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'csr', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
+                                <button type="button" data-action="save" data-save-index="${saveIndex}" class="btn-mini">Save to Vault</button>
                             </div>
                             <span class="font-semibold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">${csr.pubkeyAlg ? `${pubkeyLabel(csr)} public key` : 'Public key details unavailable'}</span>
@@ -105,14 +106,13 @@ function renderCsrNode(csr) {
     `;
 }
 
-function renderChainNode(cert, index) {
+function renderChainNode(cert, index, saveIndex) {
     const isLeaf = index === 0;
     const isRoot = cert.subject === cert.issuer;
 
     const label = isLeaf ? 'Leaf Certificate' : (isRoot ? 'Root CA' : 'Intermediate CA');
     const iconChip = 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10';
     const safeName = cert.cn || cert.org || 'Unknown Cert';
-    const b64Pem = window.btoa(unescape(encodeURIComponent(cert.raw)));
 
     return `
         <div class="relative z-10 flex">
@@ -131,7 +131,7 @@ function renderChainNode(cert, index) {
                         <div class="flex flex-col">
                             <div class="flex items-center gap-3 mb-0.5">
                                 <span class="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">${label}</span>
-                                <button onclick="event.preventDefault(); saveToVaultFromUI('${safeName}', 'cert', '${b64Pem}', this)" class="btn-mini">Save to Vault</button>
+                                <button type="button" data-action="save" data-save-index="${saveIndex}" class="btn-mini">Save to Vault</button>
                             </div>
                             <span class="font-semibold tracking-tight text-slate-900 dark:text-white text-lg">${safeName}</span>
                             <span class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Issuer: ${cert.issuerCN || cert.issuer}</span>
@@ -172,144 +172,138 @@ function renderChainNode(cert, index) {
     `;
 }
 
-function resolveDecoderFactory(explicitFactory) {
-    if (explicitFactory) return explicitFactory;
-    if (typeof window !== 'undefined' && typeof window.createOpenSSL !== 'undefined') {
-        return window.createOpenSSL;
+/**
+ * Decode base64 PEM certificate body to DER bytes (cross browser/Node).
+ * Used for the WebCrypto SHA-256 fingerprint below.
+ */
+export function pemCertificateToDer(certPem) {
+    const match = String(certPem || '').match(/-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----/);
+    if (!match) return null;
+    const b64 = match[1].replace(/\s+/g, '');
+    if (!b64) return null;
+    if (typeof Buffer !== 'undefined') return new Uint8Array(Buffer.from(b64, 'base64'));
+    if (typeof atob === 'function') {
+        const bin = atob(b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i += 1) out[i] = bin.charCodeAt(i);
+        return out;
     }
-    throw new Error('OpenSSL factory unavailable. Pass createOpenSSL explicitly in Node/tests.');
+    return null;
+}
+
+/** SHA-256 fingerprint as an OpenSSL-shaped line, computed natively via WebCrypto. */
+export async function sha256FingerprintLine(certPem) {
+    const der = pemCertificateToDer(certPem);
+    const subtle = globalThis.crypto && globalThis.crypto.subtle;
+    if (!der || !subtle) return '';
+    const digest = await subtle.digest('SHA-256', der);
+    const hex = Array.from(new Uint8Array(digest))
+        .map((b) => b.toString(16).padStart(2, '0').toUpperCase())
+        .join(':');
+    return `SHA256 Fingerprint=${hex}`;
 }
 
 export async function decodeCertBlock(certPem, explicitFactory = null) {
-    const factory = resolveDecoderFactory(explicitFactory);
-    const moduleDec = await factory();
-    moduleDec.FS.writeFile('/input.pem', certPem);
+    const factory = resolveFactory(explicitFactory);
+    let files;
     try {
-        moduleDec.callMain(['x509', '-in', '/input.pem', '-noout', '-subject', '-issuer', '-dates', '-serial', '-out', '/std.txt']);
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+        files = await runJobLocal(certDecodeJob(certPem, 'cert'), factory);
+    } catch (err) {
         throw new Error('OpenSSL failed to parse the certificate.');
     }
-    if (typeof process !== 'undefined' && process && process.exitCode === 1) {
-        process.exitCode = 0;
-        throw new Error('OpenSSL failed to parse the certificate.');
-    }
-    let stdOut;
-    try {
-        stdOut = moduleDec.FS.readFile('/std.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+    const textOut = files['/cert.txt'] || '';
+    if (!textOut) {
         throw new Error('OpenSSL failed to parse the certificate.');
     }
 
-    let sanOut = '';
-    try {
-        const moduleSan = await factory();
-        moduleSan.FS.writeFile('/input.pem', certPem);
-        moduleSan.callMain(['x509', '-in', '/input.pem', '-noout', '-ext', 'subjectAltName', '-out', '/san.txt']);
-        sanOut = moduleSan.FS.readFile('/san.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        // certs without SAN throw — not fatal
-    }
-
-    // Extended details are best-effort: a valid cert always yields stdOut,
-    // but text/fingerprint extras must never break the decode flow.
-    let textOut = '';
-    try {
-        const moduleText = await factory();
-        moduleText.FS.writeFile('/input.pem', certPem);
-        moduleText.callMain(['x509', '-in', '/input.pem', '-noout', '-text', '-out', '/text.txt']);
-        textOut = moduleText.FS.readFile('/text.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-    }
-
+    // Fingerprint via WebCrypto instead of a dedicated OpenSSL pass.
     let fpOut = '';
     try {
-        const moduleFp = await factory();
-        moduleFp.FS.writeFile('/input.pem', certPem);
-        moduleFp.callMain(['x509', '-in', '/input.pem', '-noout', '-fingerprint', '-sha256', '-out', '/fp.txt']);
-        fpOut = moduleFp.FS.readFile('/fp.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+        fpOut = await sha256FingerprintLine(certPem);
+    } catch (err) {
+        // best-effort
     }
 
-    if (typeof process !== 'undefined' && process) process.exitCode = 0;
-    return { stdOut, sanOut, textOut, fpOut };
+    // The combined dump doubles as the summary source and the extended text;
+    // SAN is read from `textOut` since no separate `-ext` call is made.
+    return { stdOut: textOut, sanOut: '', textOut, fpOut };
 }
 
 export async function decodeCsrBlock(csrPem, explicitFactory = null) {
-    const factory = resolveDecoderFactory(explicitFactory);
-    const moduleSubj = await factory();
-    moduleSubj.FS.writeFile('/input.csr', csrPem);
-    moduleSubj.FS.writeFile('/openssl.cnf', opensslCnf);
-    moduleSubj.ENV.OPENSSL_CONF = '/openssl.cnf';
+    const factory = resolveFactory(explicitFactory);
+    let files;
     try {
-        moduleSubj.callMain(['req', '-in', '/input.csr', '-noout', '-subject', '-out', '/subj.txt', '-config', '/openssl.cnf']);
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+        files = await runJobLocal(csrDecodeJob(csrPem, 'csr'), factory);
+    } catch (err) {
         throw new Error('OpenSSL failed to parse the certificate request.');
     }
-    let subjectOut = '';
-    try {
-        subjectOut = moduleSubj.FS.readFile('/subj.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+    const textOut = files['/csr.txt'] || '';
+    if (!textOut) {
         throw new Error('OpenSSL failed to parse the certificate request.');
     }
-
-    let textOut = '';
-    try {
-        const moduleText = await factory();
-        moduleText.FS.writeFile('/input.csr', csrPem);
-        moduleText.FS.writeFile('/openssl.cnf', opensslCnf);
-        moduleText.ENV.OPENSSL_CONF = '/openssl.cnf';
-        moduleText.callMain(['req', '-in', '/input.csr', '-noout', '-text', '-out', '/csrtext.txt', '-config', '/openssl.cnf']);
-        textOut = moduleText.FS.readFile('/csrtext.txt', { encoding: 'utf8' });
-    } catch (e) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        // subject parsed fine; extended text is best-effort
-    }
-    if (typeof process !== 'undefined' && process) process.exitCode = 0;
-    return { subjectOut, textOut };
+    const subjectLine = (textOut.match(/^subject=.*$/m) || [''])[0];
+    return { subjectOut: subjectLine || textOut, textOut };
 }
 
-async function executePemChainDecode(blocks) {
+let decodeGeneration = 0;
+const vaultSaveRegistry = [];
+
+async function executePemChainDecode(blocks, generation) {
     const resultsContainer = document.getElementById('decodeResults');
     const loader = document.getElementById('decodeLoader');
     const parsedCerts = [];
     const parsedCsrs = [];
 
     try {
+        // Build one serialisable job per PEM block and run them as a batch:
+        // a worker pool handles large bundles off the main thread while small
+        // bundles (and any worker failure) run locally — identical results.
+        const jobs = blocks.map((block, index) => (
+            block.includes('CERTIFICATE REQUEST')
+                ? csrDecodeJob(block, `decode-${index}`)
+                : certDecodeJob(block, `decode-${index}`)
+        ));
+        const results = await runJobs(jobs);
+        if (generation !== decodeGeneration) return;
+
         for (let i = 0; i < blocks.length; i += 1) {
+            const files = results[i] || {};
             if (blocks[i].includes('CERTIFICATE REQUEST')) {
-                const { subjectOut, textOut } = await decodeCsrBlock(blocks[i]);
+                const textOut = files['/csr.txt'] || '';
+                if (!textOut) throw new Error('OpenSSL failed to parse the certificate request.');
+                const subjectLine = (textOut.match(/^subject=.*$/m) || [''])[0];
                 const meta = parseCsrMetadata(textOut);
                 meta.raw = blocks[i];
-                meta.rawDetails = (subjectOut || '').trim();
+                meta.rawDetails = (subjectLine || textOut).trim();
                 parsedCsrs.push(meta);
             } else {
-                const { stdOut, sanOut, textOut, fpOut } = await decodeCertBlock(blocks[i]);
-                const meta = parseCertMetadata(stdOut, sanOut, textOut, fpOut);
+                const textOut = files['/cert.txt'] || '';
+                if (!textOut) throw new Error('OpenSSL failed to parse the certificate.');
+                const fpOut = await sha256FingerprintLine(blocks[i]).catch(() => '');
+                const meta = parseCertMetadata(textOut, '', textOut, fpOut);
                 meta.raw = blocks[i];
-                meta.rawDetails = stdOut.trim();
+                meta.rawDetails = textOut.trim();
                 parsedCerts.push(meta);
             }
         }
+        if (generation !== decodeGeneration) return;
 
+        vaultSaveRegistry.length = 0;
         const sortedCerts = buildLogicalChain(parsedCerts);
-        resultsContainer.innerHTML = '';
+        let html = '';
         sortedCerts.forEach((cert, index) => {
-            resultsContainer.innerHTML += renderChainNode(cert, index);
+            const saveIndex = vaultSaveRegistry.push({ label: cert.cn || cert.org || 'Unknown Cert', type: 'cert', pem: cert.raw }) - 1;
+            html += renderChainNode(cert, index, saveIndex);
         });
         parsedCsrs.forEach((csr) => {
-            resultsContainer.innerHTML += renderCsrNode(csr);
+            const saveIndex = vaultSaveRegistry.push({ label: csr.cn || csr.org || 'Unknown CSR', type: 'csr', pem: csr.raw }) - 1;
+            html += renderCsrNode(csr, saveIndex);
         });
+        resultsContainer.innerHTML = html;
     } catch (err) {
         console.error(err);
     } finally {
-        loader.classList.add('hidden');
+        if (generation === decodeGeneration) loader.classList.add('hidden');
     }
 }
 
@@ -322,26 +316,33 @@ export function decodeEmptyNote(hasText) {
 }
 
 export function initDecoderTool() {
-    window.saveToVaultFromUI = (label, type, rawPem, btn) => {
-        const pem = decodeURIComponent(escape(window.atob(rawPem)));
-        const added = saveToVault(label, type, pem);
-        if (btn) {
-            const orig = btn.textContent;
-            btn.textContent = added ? 'Saved' : 'Already in Vault';
-            btn.disabled = true;
-            setTimeout(() => {
-                btn.textContent = orig;
-                btn.disabled = false;
-            }, 2000);
-        }
-    };
+    const resultsContainer = document.getElementById('decodeResults');
+    const loader = document.getElementById('decodeLoader');
+
+    // Delegated vault-save handler: buttons carry a registry index instead of a
+    // base64 PEM body embedded in the DOM.
+    resultsContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-save-index]');
+        if (!btn) return;
+        e.preventDefault();
+        const entry = vaultSaveRegistry[Number(btn.getAttribute('data-save-index'))];
+        if (!entry) return;
+        const added = saveToVault(entry.label, entry.type, entry.pem);
+        const orig = btn.textContent;
+        btn.textContent = added ? 'Saved' : 'Already in Vault';
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.textContent = orig;
+            btn.disabled = false;
+        }, 2000);
+    });
 
     document.getElementById('pemInput').addEventListener('input', (e) => {
         const pemText = e.target.value;
-        const resultsContainer = document.getElementById('decodeResults');
-        const loader = document.getElementById('decodeLoader');
-
         clearTimeout(decodeDebounceTimer);
+
+        // Bump the generation so any in-flight decode is discarded.
+        const generation = ++decodeGeneration;
 
         const blocks = pemText.match(/-----BEGIN (?:CERTIFICATE|CERTIFICATE REQUEST)-----[\s\S]*?-----END (?:CERTIFICATE|CERTIFICATE REQUEST)-----/g);
         if (!blocks || blocks.length === 0) {
@@ -352,7 +353,7 @@ export function initDecoderTool() {
 
         loader.classList.remove('hidden');
         decodeDebounceTimer = setTimeout(() => {
-            executePemChainDecode(blocks);
+            executePemChainDecode(blocks, generation);
         }, 500);
     });
 }

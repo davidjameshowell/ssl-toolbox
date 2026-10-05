@@ -48,6 +48,17 @@ OpenSSL is compiled to WebAssembly using [Emscripten](https://emscripten.org/). 
 4. OpenSSL writes its output back to linear memory; JavaScript reads the result and renders it in the UI or offers it as a browser download.
 5. The WASM instance is discarded.
 
+### Engine architecture
+
+The engine (`js/openssl/engine.js`) compiles `openssl.wasm` **once per page** into a `WebAssembly.Module`, then instantiates a **fresh, single-use instance for every OpenSSL invocation**. A compiled `WebAssembly.Module` can be instantiated repeatedly, but an OpenSSL instance cannot safely run a second command: the factory is reused, the instance is not. This keeps repeat operations fast without weakening the per-operation isolation.
+
+Two further optimisations keep the number of invocations low:
+
+- **Combined output flags** — a single `x509 -noout -subject -issuer -dates -serial -text` produces the summary lines *and* the full dump, so a certificate or CSR needs one invocation rather than several.
+- **WebCrypto fingerprints** — SHA-256 fingerprints are computed with `crypto.subtle` over the DER instead of spending a separate OpenSSL pass.
+
+For large PEM bundles (four or more blocks), decoding is dispatched to a small pool of Web Workers (`js/openssl/pool.js`), each of which compiles the wasm once and then executes jobs (`js/openssl/jobs.js`) off the main thread. The pool is deliberately fail-safe: workers announce readiness before any job is sent, every job has a timeout, and any worker failure transparently falls back to identical main-thread execution.
+
 At no point is there an outbound network request carrying user data. You can verify this yourself: open DevTools → Network and apply the XHR/Fetch filter while using any tool.
 
 The WASM sandbox has no access to the OS, filesystem, or network beyond what the JavaScript host explicitly provides — see [Security Model](#security-model) for details.
@@ -79,11 +90,18 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 │   │   ├── matcher.js              # Key Matcher tool
 │   │   ├── decryptor.js            # Key Decryptor tool
 │   │   └── converter.js            # Certificate Converter tool
+│   ├── openssl/
+│   │   ├── engine.js               # Compile-once loader + runOpenSSL / OpenSSLError
+│   │   ├── jobs.js                 # Serialisable OpenSSL jobs + shared local runner
+│   │   ├── pool.js                 # Web Worker pool with main-thread fallback
+│   │   └── openssl-worker.js       # Classic worker: one job per fresh instance
 │   └── utils/
 │       ├── cert.js                 # Certificate metadata parsing helpers
 │       ├── decrypt.js              # Encrypted-key decrypt/inspect helpers
 │       ├── reveal.js               # Password show/hide toggle helper
 │       └── download.js             # Browser download helper
+├── tests/
+│   └── engine.test.js              # Engine + job-suite tests against the real wasm
 ├── vendor/
 │   └── openssl/
 │       ├── openssl.js              # Emscripten JS glue layer
@@ -92,6 +110,7 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 │   ├── server.py                   # Local static server with correct WASM MIME type
 │   └── rebuild_openssl_if_changed.sh  # Rebuilds vendor/openssl/ via Docker when Dockerfile changes
 ├── Dockerfile                      # Reproducible Emscripten + OpenSSL WASM build
+├── _headers                        # Cloudflare cache-control + security headers
 ├── .wranglerignore                 # Files excluded from Cloudflare asset uploads
 └── .github/
     └── workflows/
@@ -194,16 +213,23 @@ docker run --rm -v "$(pwd)/vendor/openssl":/out pki-toolkit-openssl-builder \
 
 ### Build configuration
 
-The `Dockerfile` compiles OpenSSL with the following key flags:
+The `Dockerfile` pins `emscripten/emsdk:3.1.74` for reproducible builds and compiles OpenSSL with the following key flags:
 
 | Flag | Purpose |
 |---|---|
+| `CC="emcc -O3"` | Compiles the C sources optimised (emcc otherwise defaults to `-O0`); `-O3` is repeated in `LDFLAGS` for the final link |
 | `linux-generic32` | Generic 32-bit target required for WASM |
-| `no-shared`, `no-asm`, `no-threads` | Removes incompatible features |
-| `enable-legacy` | Enables legacy provider for older PFX formats (e.g. RC2/3DES) |
-| `-sMODULARIZE=1 -sEXPORT_NAME=createOpenSSL` | Wraps the module in a factory function for safe re-instantiation |
+| `no-shared`, `no-asm`, `no-threads`, `no-engine`, `no-dso`, `no-hw` | Removes incompatible/unsupported platform features |
+| `no-sock`, `no-ui-console` | Drops networking and interactive-console code the browser build never uses |
+| `no-srp no-ocsp no-cmp no-ts no-ct no-dgram` | Prunes protocol/feature code not exercised by the toolkit (~8% smaller `.wasm`) |
+| `enable-legacy` | Enables the legacy provider for older PFX formats (e.g. RC2/3DES) |
+| `-sMODULARIZE=1 -sEXPORT_NAME=createOpenSSL` | Wraps the module in a factory function so the compiled module can be instantiated per call |
+| `-sASSERTIONS=0` | Strips runtime assertions from the release build |
+| `-sMALLOC=emmalloc` | Smaller allocator than the default dlalloc |
+| `-sENVIRONMENT=web,worker,node` | Supports both the browser, the worker offload, and the Node test harness |
 | `-sALLOW_MEMORY_GROWTH=1` | Allows the WASM heap to grow for large certificates |
 | `-sFORCE_FILESYSTEM=1` | Emscripten virtual FS (required for OpenSSL file I/O model) |
+| `-sEXIT_RUNTIME=0` | `callMain` returns the exit status instead of tearing down the runtime |
 
 ---
 
@@ -213,7 +239,9 @@ The `Dockerfile` compiles OpenSSL with the following key flags:
 
 This project deploys as a static asset bundle to a [Cloudflare Worker](https://developers.cloudflare.com/workers/static-assets/). No Worker script is written — Wrangler is invoked with `--assets .` which instructs Cloudflare to serve the directory as a static site.
 
-A `.wranglerignore` file excludes non-web assets (`.git/`, `.github/`, `Dockerfile`, `scripts/`, `archive/`, `README.md`) from uploads.
+A `.wranglerignore` file excludes non-web assets (`.git/`, `.github/`, `Dockerfile`, `scripts/`, `tests/`, `node_modules/`, `README.md`) from uploads.
+
+A `_headers` file applies security headers (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`) to every response and a one-hour, revalidating `Cache-Control` to `/assets/*` and `/vendor/openssl/*`. The OpenSSL engine ships as an unhashed, version-coupled `openssl.js` + `openssl.wasm` pair, so it deliberately does **not** get `immutable` caching — a fresh deploy revalidates within the hour instead of for a year.
 
 There is no `wrangler.toml` — all configuration is passed as CLI arguments in the workflow.
 
@@ -276,7 +304,9 @@ npm install          # once
 npm test             # node --test tests/*.test.js
 ```
 
-The suite runs in CI (advisory) on every push and pull request.
+`tests/engine.test.js` additionally covers the engine layer directly: exit-status normalisation, `OpenSSLError` mapping and `process.exitCode` reset, the one-instance-per-certificate/CSR guarantee, the local job executor, and WebCrypto vs Node fingerprint agreement.
+
+The suite runs in CI (advisory) on every push and pull request; a failure warns but does not block preview deployments.
 
 ---
 

@@ -1,0 +1,18 @@
+# Cloudflare Workers static-assets header rules.
+# https://developers.cloudflare.com/workers/static-assets/headers/
+#
+# The OpenSSL engine ships as an unhashed, version-coupled pair (openssl.js +
+# openssl.wasm), so it gets a same-length shared max-age rather than `immutable`
+# — a fresh deploy revalidates within the hour instead of for a year.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), payment=()
+
+/assets/*
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/vendor/openssl/*
+  Cache-Control: public, max-age=3600, must-revalidate

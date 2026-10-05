@@ -1,50 +1,53 @@
 import { opensslCnf } from '../state.js';
 import { getVaultItemById } from '../vault.js';
-
-function resolveConverterFactory(explicitFactory) {
-    if (explicitFactory) return explicitFactory;
-    if (typeof window !== 'undefined' && typeof window.createOpenSSL !== 'undefined') {
-        return window.createOpenSSL;
-    }
-    throw new Error('OpenSSL factory unavailable. Pass createOpenSSL explicitly in Node/tests.');
-}
+import { resolveFactory, runOpenSSL, readOutput } from '../openssl/engine.js';
 
 export async function runConversion({ certBytes, keyBytes = null, fromType, toType, pfxPass = '', keyPass = '' }, explicitFactory = null) {
     if (fromType === toType) {
         throw new Error('The current format and target format are the same.');
     }
-    const factory = resolveConverterFactory(explicitFactory);
-    const module = await factory();
-
+    const factory = resolveFactory(explicitFactory);
     const certData = typeof certBytes === 'string' ? certBytes : new Uint8Array(certBytes);
-    module.FS.writeFile('/input.cert', certData);
-
     const outFilename = `converted_cert.${toType}`;
 
     // P7B containers may be PEM- or DER-encoded — try PEM first, fall back to DER.
-    // Each attempt gets a fresh WASM instance: a failed callMain can leave the
-    // module's OpenSSL state poisoned for subsequent invocations.
+    // Each attempt gets a fresh WASM instance: a failed OpenSSL call aborts the
+    // instance, so it can't be reused for the next encoding guess.
     if (fromType === 'p7b' && toType === 'pem') {
         const informs = ['pem', 'der'];
         for (const inform of informs) {
             const attempt = await factory();
             attempt.FS.writeFile('/input.cert', certData);
             try {
-                attempt.callMain(['pkcs7', '-inform', inform, '-in', '/input.cert', '-print_certs', '-out', `/${outFilename}`]);
+                runOpenSSL(attempt, ['pkcs7', '-inform', inform, '-in', '/input.cert', '-print_certs', '-out', `/${outFilename}`]);
                 const outData = attempt.FS.readFile(`/${outFilename}`);
-                if (typeof process !== 'undefined' && process) process.exitCode = 0;
                 return { outData, outFilename };
             } catch (err) {
-                if (typeof process !== 'undefined' && process) process.exitCode = 0;
+                // Try the next encoding.
             }
         }
-        // callMain does not always throw on OpenSSL failure (EXIT_RUNTIME=0),
-        // so also cover the case where neither attempt produced output.
         throw new Error('Could not unpack P7B: input is neither PEM- nor DER-encoded PKCS#7.');
     }
     if (fromType === 'p7b') {
         throw new Error(`Unsupported conversion: ${fromType} -> ${toType}. P7B containers can only be unpacked to PEM.`);
     }
+
+    // DER -> P7B needs two OpenSSL passes (cert -> PEM -> PKCS#7). Each pass
+    // uses its own short-lived instance and the intermediate PEM travels via JS.
+    if (fromType === 'der' && toType === 'p7b') {
+        const toPem = await factory();
+        toPem.FS.writeFile('/input.cert', certData);
+        runOpenSSL(toPem, ['x509', '-inform', 'der', '-in', '/input.cert', '-out', '/temp.pem']);
+        const tempPem = readOutput(toPem, '/temp.pem');
+
+        const toP7b = await factory();
+        toP7b.FS.writeFile('/temp.pem', tempPem);
+        runOpenSSL(toP7b, ['crl2pkcs7', '-nocrl', '-certfile', '/temp.pem', '-out', `/${outFilename}`]);
+        return { outData: toP7b.FS.readFile(`/${outFilename}`), outFilename };
+    }
+
+    const module = await factory();
+    module.FS.writeFile('/input.cert', certData);
 
     let args = [];
 
@@ -54,9 +57,6 @@ export async function runConversion({ certBytes, keyBytes = null, fromType, toTy
         args = ['x509', '-inform', 'der', '-in', '/input.cert', '-out', `/${outFilename}`];
     } else if (fromType === 'pem' && toType === 'p7b') {
         args = ['crl2pkcs7', '-nocrl', '-certfile', '/input.cert', '-out', `/${outFilename}`];
-    } else if (fromType === 'der' && toType === 'p7b') {
-        module.callMain(['x509', '-inform', 'der', '-in', '/input.cert', '-out', '/temp.pem']);
-        args = ['crl2pkcs7', '-nocrl', '-certfile', '/temp.pem', '-out', `/${outFilename}`];
     } else if (toType === 'pfx') {
         if (!keyBytes) throw new Error('A private key is required to create a PFX/PKCS#12 file.');
         const keyData = typeof keyBytes === 'string' ? keyBytes : new Uint8Array(keyBytes);
@@ -81,15 +81,8 @@ export async function runConversion({ certBytes, keyBytes = null, fromType, toTy
         throw new Error(`Unsupported conversion: ${fromType} -> ${toType}`);
     }
 
-    try {
-        module.callMain(args);
-        const out = { outData: module.FS.readFile(`/${outFilename}`), outFilename };
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        return out;
-    } catch (err) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
-        throw err;
-    }
+    runOpenSSL(module, args);
+    return { outData: module.FS.readFile(`/${outFilename}`), outFilename };
 }
 
 const FORMAT_LABELS = { pem: 'PEM', der: 'DER', p7b: 'P7B' };

@@ -1,18 +1,11 @@
 import { opensslCnf } from '../state.js';
+import { resolveFactory, runOpenSSL, readOutput } from '../openssl/engine.js';
 
 export function detectPemType(pem) {
     if (pem.includes('BEGIN CERTIFICATE REQUEST')) return 'req';
     if (pem.includes('BEGIN CERTIFICATE')) return 'x509';
     if (pem.includes('PRIVATE KEY')) return 'pkey';
     return null;
-}
-
-function resolveFactory(explicitFactory) {
-    if (explicitFactory) return explicitFactory;
-    if (typeof window !== 'undefined' && typeof window.createOpenSSL !== 'undefined') {
-        return window.createOpenSSL;
-    }
-    throw new Error('OpenSSL factory unavailable. Pass createOpenSSL explicitly in Node/tests.');
 }
 
 export async function extractPublicKey(pemText, password, inputName, explicitFactory = null) {
@@ -41,12 +34,10 @@ export async function extractPublicKey(pemText, password, inputName, explicitFac
     }
 
     try {
-        module.callMain(args);
-        const out = module.FS.readFile('/out.pub', { encoding: 'utf8' }).trim();
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
+        runOpenSSL(module, args);
+        const out = readOutput(module, '/out.pub').trim();
         return out;
     } catch (err) {
-        if (typeof process !== 'undefined' && process) process.exitCode = 0;
         if (type === 'pkey') {
             throw new Error(`${inputName}: Failed to read Private Key. If it is encrypted, ensure the password is correct.`);
         }
