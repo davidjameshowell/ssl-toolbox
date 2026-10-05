@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { runConversion, validateConversionState, detectSourceFormat } from '../js/tools/converter.js';
 import { extractPfxData } from '../js/tools/pfx.js';
 import { extractPublicKey } from '../js/tools/matcher.js';
-import { genSelfSignedCert, genEncryptedKeys, certForKey, makeP7b, TEST_PASSWORD } from './helpers/openssl.js';
+import { genSelfSignedCert, genEncryptedKeys, certForKey, makeP7b, newFixtureSecret } from './helpers/openssl.js';
 import { getOpenSSLFactory } from './helpers/wasm.js';
 
 const textOf = (u8) => Buffer.from(u8).toString('utf8');
+const fixtureNonce = newFixtureSecret();
 
 describe('converter', () => {
     it('round-trips PEM -> DER -> PEM', async () => {
@@ -29,11 +30,11 @@ describe('converter', () => {
         const { certPem, keyPem } = genSelfSignedCert({ cn: 'bundle.example' });
         const factory = getOpenSSLFactory();
         const { outData: pfx } = await runConversion(
-            { certBytes: certPem, keyBytes: keyPem, fromType: 'pem', toType: 'pfx', pfxPass: TEST_PASSWORD },
+            { certBytes: certPem, keyBytes: keyPem, fromType: 'pem', toType: 'pfx', pfxPass: fixtureNonce },
             factory
         );
         assert.ok(pfx.length > 500);
-        const { certPem: back } = await extractPfxData(pfx, TEST_PASSWORD, factory);
+        const { certPem: back } = await extractPfxData(pfx, fixtureNonce, factory);
         assert.match(back, /BEGIN CERTIFICATE/);
     });
 
@@ -82,11 +83,11 @@ describe('converter', () => {
         const { certPem } = certForKey({ keyPem: rsaEncPem, password: keyPass, cn: 'enc-bundle.example' });
         const factory = getOpenSSLFactory();
         const { outData: pfx } = await runConversion(
-            { certBytes: certPem, keyBytes: rsaEncPem, fromType: 'pem', toType: 'pfx', pfxPass: TEST_PASSWORD, keyPass },
+            { certBytes: certPem, keyBytes: rsaEncPem, fromType: 'pem', toType: 'pfx', pfxPass: fixtureNonce, keyPass },
             factory
         );
         assert.ok(pfx.length > 500);
-        const { certPem: backCert, keyPem: backKey } = await extractPfxData(pfx, TEST_PASSWORD, factory);
+        const { certPem: backCert, keyPem: backKey } = await extractPfxData(pfx, fixtureNonce, factory);
         assert.match(backCert, /BEGIN CERTIFICATE/);
         assert.match(backKey, /BEGIN PRIVATE KEY/);
         const before = await extractPublicKey(rsaEncPem, keyPass, 'enc', factory);
