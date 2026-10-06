@@ -9,6 +9,9 @@ legacy = legacy_sect
 activate = 1
 [legacy_sect]
 activate = 1
+[req]
+distinguished_name = req_dn
+[req_dn]
 `;
 
 export const vaultStore = [];

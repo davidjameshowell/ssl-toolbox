@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 env:
   DEFAULT_WORKER_COMPATIBILITY_DATE: "2026-04-06"
@@ -23,6 +24,9 @@ jobs:
   deploy-preview:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/')
     runs-on: ubuntu-latest
+    outputs:
+      preview_name: ${{ steps.deploy.outputs.preview_name }}
+      preview_url: ${{ steps.deploy.outputs.preview_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -78,6 +82,7 @@ jobs:
           jq -r '.result[] | "- \(.name // .id // .script // "<unknown>")"' /tmp/cf_workers_services.json
 
       - name: Deploy Preview Worker
+        id: deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -107,11 +112,47 @@ jobs:
           PREVIEW_NAME="${BASE_NAME}${REF_SLUG}"
           COMPATIBILITY_DATE="${CLOUDFLARE_WORKER_COMPATIBILITY_DATE:-$DEFAULT_WORKER_COMPATIBILITY_DATE}"
 
+          echo "preview_name=$PREVIEW_NAME" >> "$GITHUB_OUTPUT"
           echo "Deploying preview worker: $PREVIEW_NAME"
-          wrangler deploy \
+          DEPLOY_OUT=$(wrangler deploy \
             --name "$PREVIEW_NAME" \
             --compatibility-date "$COMPATIBILITY_DATE" \
-            --assets .
+            --assets . 2>&1 | tee /dev/stderr)
+          PREVIEW_URL=$(echo "$DEPLOY_OUT" | grep -oE 'https://[a-z0-9.-]+\.workers\.dev' | head -n1 || true)
+          if [[ -n "$PREVIEW_URL" ]]; then
+            echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          fi
+
+  comment-preview-url:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/') && github.ref_name != 'main'
+    needs: deploy-preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post preview URL to PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_NAME: ${{ needs.deploy-preview.outputs.preview_name }}
+          PREVIEW_URL: ${{ needs.deploy-preview.outputs.preview_url }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER=$(gh pr list --head "$GITHUB_REF_NAME" --json number --jq '.[0].number // empty' || true)
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo "No open PR for branch $GITHUB_REF_NAME — skipping comment."
+            exit 0
+          fi
+          if [[ -n "$PREVIEW_URL" ]]; then
+            BODY="🚀 Preview: $PREVIEW_URL (${PREVIEW_NAME}, commit ${GITHUB_SHA:0:7}) — auto-deleted on branch delete."
+          else
+            BODY="🚀 Preview worker \`${PREVIEW_NAME}\` deployed for commit ${GITHUB_SHA:0:7} — auto-deleted on branch delete."
+          fi
+          # Upsert single sticky comment (replace on re-push)
+          EXISTING=$(gh pr view "$PR_NUMBER" --json comments --jq '[.comments[] | select(.author.login=="github-actions[bot]" and (.body | contains("Preview"))) | .id] | last // empty' || true)
+          if [[ -n "$EXISTING" ]]; then
+            echo "Updating existing preview comment."
+            gh api "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" -X PATCH -f body="$BODY" >/dev/null
+          else
+            gh pr comment "$PR_NUMBER" --body "$BODY"
+          fi
 
   deploy-production:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')

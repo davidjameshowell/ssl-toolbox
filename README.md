@@ -29,11 +29,12 @@ PKI Toolkit is a fully client-side web application that brings the full power of
 
 | Tool | Description |
 |---|---|
-| **Cert Decoder** | Paste one or more PEM certificates to inspect subject, issuer, SANs, serial number, and validity dates. Chains are sorted leaf→root automatically. |
-| **PFX Extractor** | Upload a `.pfx` or `.p12` archive (optionally password-protected) to extract the certificate and private key as PEM files. Results are auto-saved to the Memory Vault. |
+| **Cert Decoder** | Paste PEM certificates and CSRs to inspect subject, issuer, SANs, serial number, signature algorithm, public key, key usages, SHA-256 fingerprint, and expiry status. Chains are sorted leaf→root automatically. |
+| **PFX Extractor** | Upload a `.pfx` or `.p12` archive (optionally password-protected) to extract the certificate chain and private key as PEM files. Multi-cert chains list every certificate; certs-only archives work too. Results are auto-saved to the Memory Vault. |
 | **Key Matcher** | Verify that a private key corresponds to a certificate or CSR by extracting and comparing public keys. Supports encrypted keys. |
-| **Cert Converter** | Convert between PEM, DER, P7B / PKCS#7, and PFX / PKCS#12 formats entirely in-browser. |
-| **Memory Vault** | A session-scoped in-memory store. Save certs and keys between tools without re-uploading. Supports manual upload (auto-detects cert vs key) and one-click clear. Cleared on tab close. |
+| **Key Decryptor** | Remove the password from an encrypted PEM private key: paste, load from the Vault, or upload the file, enter its password, and get cleartext PEM (text + file download), with auto PKCS#8/Traditional detection and a key-info summary. |
+| **Cert Converter** | Convert between PEM, DER, P7B / PKCS#7 (including P7B unpacking back to PEM), and PFX / PKCS#12 formats entirely in-browser. PFX builds accept an optional private-key password for encrypted keys. |
+| **Memory Vault** | A session-scoped in-memory store. Save certs, keys, and CSRs between tools without re-uploading. Supports manual upload (auto-detects cert vs key vs CSR), per-item open-in-tool / download / remove, and one-click clear. Cleared on tab close. |
 
 ---
 
@@ -47,6 +48,17 @@ OpenSSL is compiled to WebAssembly using [Emscripten](https://emscripten.org/). 
 4. OpenSSL writes its output back to linear memory; JavaScript reads the result and renders it in the UI or offers it as a browser download.
 5. The WASM instance is discarded.
 
+### Engine architecture
+
+The engine (`js/openssl/engine.js`) compiles `openssl.wasm` **once per page** into a `WebAssembly.Module`, then instantiates a **fresh, single-use instance for every OpenSSL invocation**. A compiled `WebAssembly.Module` can be instantiated repeatedly, but an OpenSSL instance cannot safely run a second command: the factory is reused, the instance is not. This keeps repeat operations fast without weakening the per-operation isolation.
+
+Two further optimisations keep the number of invocations low:
+
+- **Combined output flags** — a single `x509 -noout -subject -issuer -dates -serial -text` produces the summary lines *and* the full dump, so a certificate or CSR needs one invocation rather than several.
+- **WebCrypto fingerprints** — SHA-256 fingerprints are computed with `crypto.subtle` over the DER instead of spending a separate OpenSSL pass.
+
+For large PEM bundles (four or more blocks), decoding is dispatched to a small pool of Web Workers (`js/openssl/pool.js`), each of which compiles the wasm once and then executes jobs (`js/openssl/jobs.js`) off the main thread. The pool is deliberately fail-safe: workers announce readiness before any job is sent, every job has a timeout, and any worker failure transparently falls back to identical main-thread execution.
+
 At no point is there an outbound network request carrying user data. You can verify this yourself: open DevTools → Network and apply the XHR/Fetch filter while using any tool.
 
 The WASM sandbox has no access to the OS, filesystem, or network beyond what the JavaScript host explicitly provides — see [Security Model](#security-model) for details.
@@ -58,19 +70,38 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 ```
 .
 ├── index.html                      # Single-page application entry point
+├── assets/
+│   ├── app.css                     # Compiled Tailwind stylesheet (committed; no runtime CSS)
+│   ├── favicon.svg                 # Application icon
+│   ├── manifest.webmanifest        # PWA metadata (name, theme color)
+│   └── fonts/                      # Self-hosted Inter woff2 (no font CDN)
+├── css/
+│   └── app.css                     # Tailwind source stylesheet + component layer
+├── tailwind.config.js              # Tailwind build config (content globs, dark mode)
 ├── js/
 │   ├── main.js                     # App bootstrap and module initialisation
 │   ├── navigation.js               # Tab switching logic
+│   ├── theme.js                    # Light/dark theme toggle and persistence
 │   ├── state.js                    # Shared app state (vault, openssl config)
 │   ├── vault.js                    # Memory Vault logic and sidebar UI
 │   ├── tools/
 │   │   ├── decoder.js              # Certificate Decoder tool
 │   │   ├── pfx.js                  # PFX Extractor tool
 │   │   ├── matcher.js              # Key Matcher tool
+│   │   ├── decryptor.js            # Key Decryptor tool
 │   │   └── converter.js            # Certificate Converter tool
+│   ├── openssl/
+│   │   ├── engine.js               # Compile-once loader + runOpenSSL / OpenSSLError
+│   │   ├── jobs.js                 # Serialisable OpenSSL jobs + shared local runner
+│   │   ├── pool.js                 # Web Worker pool with main-thread fallback
+│   │   └── openssl-worker.js       # Classic worker: one job per fresh instance
 │   └── utils/
 │       ├── cert.js                 # Certificate metadata parsing helpers
+│       ├── decrypt.js              # Encrypted-key decrypt/inspect helpers
+│       ├── reveal.js               # Password show/hide toggle helper
 │       └── download.js             # Browser download helper
+├── tests/
+│   └── engine.test.js              # Engine + job-suite tests against the real wasm
 ├── vendor/
 │   └── openssl/
 │       ├── openssl.js              # Emscripten JS glue layer
@@ -79,6 +110,7 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 │   ├── server.py                   # Local static server with correct WASM MIME type
 │   └── rebuild_openssl_if_changed.sh  # Rebuilds vendor/openssl/ via Docker when Dockerfile changes
 ├── Dockerfile                      # Reproducible Emscripten + OpenSSL WASM build
+├── _headers                        # Cloudflare cache-control + security headers
 ├── .wranglerignore                 # Files excluded from Cloudflare asset uploads
 └── .github/
     └── workflows/
@@ -93,7 +125,19 @@ The WASM sandbox has no access to the OS, filesystem, or network beyond what the
 ### Prerequisites
 
 - Python 3 (for the local dev server)
+- Node.js 20+ (for tests and CSS builds)
 - A modern browser with WebAssembly support (Chrome, Firefox, Safari, Edge)
+
+### Styles
+
+The stylesheet (`assets/app.css`) is **precompiled and committed** — there is no runtime CSS compilation and no Tailwind CDN. Regenerate it only when markup classes or the component layer change:
+
+```bash
+npm install          # once; installs tailwindcss as a devDependency
+npm run build:css    # css/app.css -> assets/app.css (minified)
+```
+
+Commit the rebuilt `assets/app.css` with your change. CI does not rebuild CSS; deploys serve the committed file.
 
 ### Start the development server
 
@@ -169,16 +213,23 @@ docker run --rm -v "$(pwd)/vendor/openssl":/out pki-toolkit-openssl-builder \
 
 ### Build configuration
 
-The `Dockerfile` compiles OpenSSL with the following key flags:
+The `Dockerfile` pins `emscripten/emsdk:3.1.74` for reproducible builds and compiles OpenSSL with the following key flags:
 
 | Flag | Purpose |
 |---|---|
+| `CC="emcc -O3"` | Compiles the C sources optimised (emcc otherwise defaults to `-O0`); `-O3` is repeated in `LDFLAGS` for the final link |
 | `linux-generic32` | Generic 32-bit target required for WASM |
-| `no-shared`, `no-asm`, `no-threads` | Removes incompatible features |
-| `enable-legacy` | Enables legacy provider for older PFX formats (e.g. RC2/3DES) |
-| `-sMODULARIZE=1 -sEXPORT_NAME=createOpenSSL` | Wraps the module in a factory function for safe re-instantiation |
+| `no-shared`, `no-asm`, `no-threads`, `no-engine`, `no-dso`, `no-hw` | Removes incompatible/unsupported platform features |
+| `no-sock`, `no-ui-console` | Drops networking and interactive-console code the browser build never uses |
+| `no-srp no-ocsp no-cmp no-ts no-ct no-dgram` | Prunes protocol/feature code not exercised by the toolkit (~8% smaller `.wasm`) |
+| `enable-legacy` | Enables the legacy provider for older PFX formats (e.g. RC2/3DES) |
+| `-sMODULARIZE=1 -sEXPORT_NAME=createOpenSSL` | Wraps the module in a factory function so the compiled module can be instantiated per call |
+| `-sASSERTIONS=0` | Strips runtime assertions from the release build |
+| `-sMALLOC=emmalloc` | Smaller allocator than the default dlalloc |
+| `-sENVIRONMENT=web,worker,node` | Supports both the browser, the worker offload, and the Node test harness |
 | `-sALLOW_MEMORY_GROWTH=1` | Allows the WASM heap to grow for large certificates |
 | `-sFORCE_FILESYSTEM=1` | Emscripten virtual FS (required for OpenSSL file I/O model) |
+| `-sEXIT_RUNTIME=0` | `callMain` returns the exit status instead of tearing down the runtime |
 
 ---
 
@@ -188,7 +239,9 @@ The `Dockerfile` compiles OpenSSL with the following key flags:
 
 This project deploys as a static asset bundle to a [Cloudflare Worker](https://developers.cloudflare.com/workers/static-assets/). No Worker script is written — Wrangler is invoked with `--assets .` which instructs Cloudflare to serve the directory as a static site.
 
-A `.wranglerignore` file excludes non-web assets (`.git/`, `.github/`, `Dockerfile`, `scripts/`, `archive/`, `README.md`) from uploads.
+A `.wranglerignore` file excludes non-web assets (`.git/`, `.github/`, `Dockerfile`, `scripts/`, `tests/`, `node_modules/`, `README.md`) from uploads.
+
+A `_headers` file applies security headers (`X-Content-Type-Options`, `Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`) to every response and a one-hour, revalidating `Cache-Control` to `/assets/*` and `/vendor/openssl/*`. The OpenSSL engine ships as an unhashed, version-coupled `openssl.js` + `openssl.wasm` pair, so it deliberately does **not** get `immutable` caching — a fresh deploy revalidates within the hour instead of for a year.
 
 There is no `wrangler.toml` — all configuration is passed as CLI arguments in the workflow.
 
@@ -237,10 +290,23 @@ Configure the following in **Settings → Secrets and variables → Actions** on
 PKI Toolkit is designed around the principle that users should never need to trust a server with private key material.
 
 - **No server-side crypto.** All OpenSSL operations run inside a WebAssembly sandbox in your browser tab. The WASM runtime enforces a hard boundary: the module cannot open network sockets, read host files, or access any OS resource outside of what the JavaScript host intentionally exposes.
-- **No persistent storage.** The Memory Vault is a plain JavaScript array in the page's runtime memory. It is never written to `localStorage`, `sessionStorage`, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents.
-- **No telemetry.** The application makes no outbound requests with user data. The only outbound requests are for the Tailwind CSS CDN on page load (a standard CDN request with no user data) and Cloudflare's own Wrangler telemetry during deployment (which is unrelated to runtime usage).
+- **No persistent storage.** The Memory Vault is a plain JavaScript array in the page's runtime memory. It is never written to `localStorage`, `sessionStorage`, IndexedDB, or cookies. Closing or refreshing the tab immediately discards all vault contents. (The only `localStorage` entry is your light/dark theme choice.)
+- **No telemetry.** The application makes no outbound requests with user data — all assets (CSS, fonts, WASM, icons) are same-origin. The only non-same-origin activity is Cloudflare's own Wrangler telemetry during deployment, which is unrelated to runtime usage.
 - **Auditable.** The full source is available in this repository. You can inspect the network activity in DevTools → Network while using any tool to verify no data leaves the browser.
-- **Offline-capable.** Once the page and its assets have loaded, the application works with no network connection.
+- **Offline-capable.** Once the page and its assets have loaded, the application works with no network connection. There are no external requests at all — CSS, fonts, and the WASM binary are same-origin.
+
+### Tests
+
+A zero-dependency Node test suite drives the real `openssl.wasm` binary:
+
+```bash
+npm install          # once
+npm test             # node --test tests/*.test.js
+```
+
+`tests/engine.test.js` additionally covers the engine layer directly: exit-status normalisation, `OpenSSLError` mapping and `process.exitCode` reset, the one-instance-per-certificate/CSR guarantee, the local job executor, and WebCrypto vs Node fingerprint agreement.
+
+The suite runs in CI (advisory) on every push and pull request; a failure warns but does not block preview deployments.
 
 ---
 
